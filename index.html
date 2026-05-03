@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="勤怠管理">
+  <title>勤怠管理システム</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue:    #2563eb;
+      --blue-dk: #1d4ed8;
+      --green:   #16a34a;
+      --green-dk:#15803d;
+      --red:     #dc2626;
+      --amber:   #d97706;
+      --purple:  #7c3aed;
+      --pink:    #be185d;
+      --g50:  #f9fafb;
+      --g100: #f3f4f6;
+      --g200: #e5e7eb;
+      --g300: #d1d5db;
+      --g400: #9ca3af;
+      --g500: #6b7280;
+      --g600: #4b5563;
+      --g700: #374151;
+      --g800: #1f2937;
+      --g900: #111827;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: -apple-system, 'Hiragino Sans', 'Yu Gothic UI', sans-serif;
+      background: var(--g100);
+      color: var(--g900);
+      min-height: 100vh;
+      -webkit-tap-highlight-color: transparent;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    /* ── Header ── */
+    .hdr {
+      background: var(--blue);
+      color: #fff;
+      padding: 14px 20px;
+      padding-top: calc(14px + env(safe-area-inset-top));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      box-shadow: 0 2px 6px rgba(0,0,0,.25);
+    }
+    .hdr-title { font-size: 20px; font-weight: 800; letter-spacing: -.3px; }
+    .hdr-clock { text-align: right; }
+    .hdr-date  { font-size: 12px; opacity: .85; }
+    .hdr-time  { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    /* ── Summary bar ── */
+    .summary-bar {
+      background: #fff;
+      padding: 10px 20px;
+      display: flex;
+      gap: 16px;
+      border-bottom: 1px solid var(--g200);
+      font-size: 13px;
+      overflow-x: auto;
+    }
+    .sum-item  { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+    .sum-dot   { width: 10px; height: 10px; border-radius: 50%; }
+    .dot-absent  { background: var(--g300); }
+    .dot-working { background: var(--green); }
+    .dot-done    { background: var(--blue); }
+    .sum-label { color: var(--g600); }
+    .sum-count { font-weight: 700; }
+
+    /* ── Nav ── */
+    .nav {
+      display: flex;
+      background: #fff;
+      border-bottom: 1px solid var(--g200);
+      position: sticky;
+      top: 62px;
+      z-index: 100;
+    }
+    .nav-btn {
+      flex: 1;
+      padding: 13px 6px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--g500);
+      text-align: center;
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      transition: color .15s, border-color .15s;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .nav-btn.on { color: var(--blue); border-bottom-color: var(--blue); }
+
+    /* ── Content ── */
+    .content { padding: 16px; max-width: 1100px; margin: 0 auto; }
+    .panel { display: none; }
+    .panel.on { display: block; }
+
+    /* ── Employee grid ── */
+    .emp-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+      gap: 14px;
+    }
+    .card {
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      overflow: hidden;
+    }
+    .card-head {
+      padding: 13px 15px;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      border-bottom: 1px solid var(--g100);
+    }
+    .avatar {
+      width: 46px; height: 46px;
+      border-radius: 50%;
+      background: var(--blue);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 19px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+    .emp-meta  { flex: 1; min-width: 0; }
+    .emp-name  { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 9px;
+      border-radius: 20px;
+      margin-top: 4px;
+    }
+    .badge-absent  { background: var(--g100); color: var(--g600); }
+    .badge-working { background: #dcfce7; color: #15803d; }
+    .badge-done    { background: #dbeafe; color: #1e40af; }
+    .work-dur { font-size: 11px; color: var(--g500); margin-top: 3px; }
+
+    .card-body { padding: 13px 15px; }
+
+    /* time boxes */
+    .time-row { display: flex; gap: 10px; margin-bottom: 10px; }
+    .time-box {
+      flex: 1;
+      text-align: center;
+      background: var(--g50);
+      border-radius: 8px;
+      padding: 9px 6px;
+    }
+    .time-lbl { font-size: 11px; color: var(--g500); margin-bottom: 3px; }
+    .time-val {
+      font-size: 20px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: var(--g800);
+    }
+    .time-val.empty { color: var(--g300); }
+
+    /* ── Extra stats chips ── */
+    .extra-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .stat-chip {
+      background: var(--g50);
+      border-radius: 7px;
+      padding: 7px 4px;
+      text-align: center;
+    }
+    .stat-chip-lbl {
+      font-size: 10px;
+      color: var(--g500);
+      margin-bottom: 2px;
+      white-space: nowrap;
+    }
+    .stat-chip-val {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--g800);
+    }
+    .c-ot   { color: var(--red); }
+    .c-dn   { color: var(--purple); }
+    .c-dnot { color: var(--pink); }
+    .c-zero { color: var(--g400); font-weight: 500; }
+    .c-est  { font-style: italic; opacity: .72; }
+
+    /* break */
+    .sec-lbl   { font-size: 12px; font-weight: 600; color: var(--g600); margin-bottom: 7px; }
+    .break-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .brk-btn {
+      padding: 6px 11px;
+      border-radius: 6px;
+      border: 1.5px solid var(--g300);
+      background: #fff;
+      color: var(--g700);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all .12s;
+      font-family: inherit;
+    }
+    .brk-btn.on       { border-color: var(--amber); background: #fef3c7; color: #92400e; }
+    .brk-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* remarks */
+    .remarks {
+      width: 100%;
+      padding: 9px 11px;
+      border: 1.5px solid var(--g200);
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: none;
+      outline: none;
+      color: var(--g800);
+      background: #fff;
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+    .remarks:focus { border-color: var(--blue); }
+
+    /* action buttons */
+    .act-row { display: flex; gap: 8px; }
+    .btn {
+      flex: 1;
+      padding: 13px 8px;
+      border-radius: 8px;
+      border: none;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: filter .12s, transform .1s;
+    }
+    .btn:active:not(:disabled) { transform: scale(.96); }
+    .btn:disabled { opacity: .38; cursor: not-allowed; transform: none !important; }
+    .btn-in   { background: var(--green); color: #fff; }
+    .btn-in:hover:not(:disabled)  { filter: brightness(1.08); }
+    .btn-out  { background: var(--red);   color: #fff; }
+    .btn-out:hover:not(:disabled) { filter: brightness(1.08); }
+    .btn-undo {
+      flex: 0 0 auto;
+      padding: 13px 15px;
+      background: var(--g100);
+      color: var(--g700);
+      font-size: 17px;
+    }
+
+    /* ── Empty state ── */
+    .empty-state { text-align: center; padding: 64px 24px; color: var(--g400); }
+    .empty-icon  { font-size: 52px; margin-bottom: 14px; }
+    .empty-msg   { font-size: 16px; margin-bottom: 6px; }
+    .empty-sub   { font-size: 14px; }
+
+    /* ── History ── */
+    .filter-bar {
+      background: #fff;
+      border-radius: var(--radius);
+      padding: 13px 16px;
+      margin-bottom: 14px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      box-shadow: 0 1px 3px rgba(0,0,0,.07);
+    }
+    .f-lbl { font-size: 13px; font-weight: 600; color: var(--g600); white-space: nowrap; }
+    .f-inp {
+      padding: 8px 11px;
+      border: 1.5px solid var(--g200);
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      color: var(--g800);
+    }
+    .f-inp:focus { border-color: var(--blue); }
+
+    .tbl-wrap {
+      background: #fff;
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,.07);
+      overflow-x: auto;
+    }
+    table { width: 100%; border-collapse: collapse; min-width: 960px; }
+    th {
+      background: var(--g50);
+      padding: 11px 12px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--g600);
+      border-bottom: 1px solid var(--g200);
+      white-space: nowrap;
+    }
+    th.h-ot   { color: var(--red); }
+    th.h-dn   { color: var(--purple); }
+    th.h-dnot { color: var(--pink); }
+    td {
+      padding: 11px 12px;
+      font-size: 14px;
+      color: var(--g800);
+      border-bottom: 1px solid var(--g100);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td      { background: var(--g50); }
+    .no-data { text-align: center; padding: 48px; color: var(--g400); font-size: 15px; }
+    .td-ot   { color: var(--red);    font-weight: 600; }
+    .td-dn   { color: var(--purple); font-weight: 600; }
+    .td-dnot { color: var(--pink);   font-weight: 600; }
+
+    /* ── Export bar ── */
+    .export-bar {
+      background: #fff;
+      border-top: 1px solid var(--g200);
+      padding: 13px 16px;
+      padding-bottom: calc(13px + env(safe-area-inset-bottom));
+      position: sticky;
+      bottom: 0;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .btn-exp {
+      padding: 12px 22px;
+      background: var(--green);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-exp:active { filter: brightness(.92); }
+
+    /* ── Settings card ── */
+    .settings-card {
+      background: #fff;
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.07);
+    }
+    .settings-card h3 {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--g600);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 11px;
+    }
+    .settings-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .settings-lbl  { font-size: 14px; color: var(--g700); white-space: nowrap; font-weight: 500; }
+    .settings-unit { font-size: 14px; color: var(--g600); }
+    .settings-num {
+      width: 60px;
+      padding: 8px 6px;
+      border: 1.5px solid var(--g200);
+      border-radius: 8px;
+      font-size: 15px;
+      font-family: inherit;
+      outline: none;
+      color: var(--g800);
+      text-align: center;
+    }
+    .settings-num:focus { border-color: var(--blue); }
+    .btn-save-set {
+      margin-left: auto;
+      padding: 9px 18px;
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-save-set:active { background: var(--blue-dk); }
+
+    /* ── Employee management ── */
+    .add-form {
+      background: #fff;
+      border-radius: var(--radius);
+      padding: 15px 16px;
+      margin-bottom: 14px;
+      display: flex;
+      gap: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.07);
+    }
+    .add-input {
+      flex: 1;
+      padding: 10px 13px;
+      border: 1.5px solid var(--g200);
+      border-radius: 8px;
+      font-size: 15px;
+      font-family: inherit;
+      outline: none;
+      color: var(--g800);
+    }
+    .add-input:focus { border-color: var(--blue); }
+    .btn-add {
+      padding: 10px 20px;
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .btn-add:active { background: var(--blue-dk); }
+
+    .emp-list { background: #fff; border-radius: var(--radius); box-shadow: 0 1px 3px rgba(0,0,0,.07); overflow: hidden; }
+    .emp-row  { display: flex; align-items: center; padding: 13px 16px; gap: 12px; border-bottom: 1px solid var(--g100); }
+    .emp-row:last-child { border-bottom: none; }
+    .emp-row-name { flex: 1; font-size: 15px; font-weight: 500; }
+    .btn-del {
+      padding: 7px 15px;
+      background: #fff;
+      border: 1.5px solid var(--red);
+      color: var(--red);
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-del:active { background: #fee2e2; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 90px;
+      left: 50%;
+      transform: translateX(-50%) translateY(14px);
+      background: rgba(17,24,39,.88);
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 500;
+      opacity: 0;
+      transition: opacity .25s, transform .25s;
+      pointer-events: none;
+      z-index: 999;
+      white-space: nowrap;
+      backdrop-filter: blur(4px);
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── Modal ── */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.45);
+      z-index: 300;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .modal { background: #fff; border-radius: 16px; padding: 24px; max-width: 380px; width: 100%; box-shadow: 0 8px 32px rgba(0,0,0,.18); }
+    .modal h3 { font-size: 18px; margin-bottom: 10px; }
+    .modal p  { font-size: 14px; color: var(--g600); margin-bottom: 22px; line-height: 1.5; }
+    .modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
+    .btn-cancel { padding: 10px 18px; background: var(--g100); color: var(--g700); border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .btn-danger { padding: 10px 18px; background: var(--red);   color: #fff;       border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; }
+
+    @media (min-width: 768px) { .nav { top: 67px; } }
+    @media (max-width: 480px) {
+      .emp-grid { grid-template-columns: 1fr; }
+      .hdr-title { font-size: 17px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-title">⏱ 勤怠管理</div>
+  <div class="hdr-clock">
+    <div class="hdr-date" id="hdrDate"></div>
+    <div class="hdr-time" id="hdrTime"></div>
+  </div>
+</div>
+
+<div class="summary-bar" id="summaryBar"></div>
+
+<div class="nav">
+  <div class="nav-btn on" data-tab="today"     onclick="switchTab('today')">今日の勤怠</div>
+  <div class="nav-btn"    data-tab="history"   onclick="switchTab('history')">履歴</div>
+  <div class="nav-btn"    data-tab="employees" onclick="switchTab('employees')">従業員管理</div>
+</div>
+
+<div class="content">
+
+  <!-- ===== TODAY ===== -->
+  <div id="tab-today" class="panel on">
+    <div class="emp-grid" id="empGrid"></div>
+    <div class="empty-state" id="empEmpty" style="display:none">
+      <div class="empty-icon">👥</div>
+      <div class="empty-msg">従業員が登録されていません</div>
+      <div class="empty-sub">「従業員管理」タブから追加してください</div>
+    </div>
+  </div>
+
+  <!-- ===== HISTORY ===== -->
+  <div id="tab-history" class="panel">
+    <div class="filter-bar">
+      <span class="f-lbl">月:</span>
+      <input type="month" class="f-inp" id="fMonth" onchange="renderHistory()">
+      <span class="f-lbl">従業員:</span>
+      <select class="f-inp" id="fEmp" onchange="renderHistory()">
+        <option value="">全員</option>
+      </select>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>日付</th>
+            <th>従業員名</th>
+            <th>出勤</th>
+            <th>退勤</th>
+            <th>休憩</th>
+            <th>実働時間</th>
+            <th class="h-ot">残業時間</th>
+            <th class="h-dn">深夜労働</th>
+            <th class="h-dnot">深夜残業</th>
+            <th>備考</th>
+          </tr>
+        </thead>
+        <tbody id="histTbody"></tbody>
+      </table>
+    </div>
+    <div class="export-bar">
+      <button class="btn-exp" onclick="exportCSV()">📥 CSV出力</button>
+    </div>
+  </div>
+
+  <!-- ===== EMPLOYEES ===== -->
+  <div id="tab-employees" class="panel">
+
+    <div class="settings-card">
+      <h3>⚙ 設定</h3>
+      <div class="settings-row">
+        <span class="settings-lbl">所定労働時間：</span>
+        <input type="number" id="setH" class="settings-num" min="0" max="23" value="8">
+        <span class="settings-unit">時間</span>
+        <input type="number" id="setM" class="settings-num" min="0" max="59" step="15" value="0">
+        <span class="settings-unit">分</span>
+        <button class="btn-save-set" onclick="saveScheduledTime()">保存</button>
+      </div>
+    </div>
+
+    <div class="add-form">
+      <input id="newName" class="add-input" type="text" placeholder="従業員名を入力..." maxlength="20"
+             onkeydown="if(event.key==='Enter')addEmployee()">
+      <button class="btn-add" onclick="addEmployee()">追加</button>
+    </div>
+    <div class="emp-list" id="empList"></div>
+    <div class="empty-state" id="empListEmpty" style="display:none">
+      <div class="empty-icon">➕</div>
+      <div class="empty-msg">従業員が登録されていません</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="overlay" id="delOverlay" style="display:none">
+  <div class="modal">
+    <h3>従業員を削除</h3>
+    <p id="delMsg"></p>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeDelModal()">キャンセル</button>
+      <button class="btn-danger" onclick="confirmDelete()">削除する</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────── Storage ───────────────
+const SK_EMP = 'kt_employees';
+const SK_REC = 'kt_records';
+const SK_SET = 'kt_settings';
+
+let employees = JSON.parse(localStorage.getItem(SK_EMP) || '[]');
+let records   = JSON.parse(localStorage.getItem(SK_REC) || '[]');
+let settings  = JSON.parse(localStorage.getItem(SK_SET) || '{"scheduledMin":480}');
+let delTarget = null;
+
+function save() {
+  localStorage.setItem(SK_EMP, JSON.stringify(employees));
+  localStorage.setItem(SK_REC, JSON.stringify(records));
+}
+function saveSettings() {
+  localStorage.setItem(SK_SET, JSON.stringify(settings));
+}
+
+// ─────────────── Date / Time ───────────────
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function nowHM() {
+  const d = new Date();
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function pad(n) { return String(n).padStart(2,'0'); }
+
+// ─────────────── Time calculation helpers ───────────────
+function overlapWith(s1, e1, s2, e2) {
+  return Math.max(0, Math.min(e1, e2) - Math.max(s1, s2));
+}
+
+// 深夜帯: 22:00–24:00 (1320–1440) + 0:00–5:00 (0–300) を繰り返し判定
+function overlapWithDeepNight(start, end) {
+  let total = 0;
+  const startDay = Math.floor(start / 1440);
+  const endDay   = Math.floor(end   / 1440) + 1;
+  for (let d = startDay; d <= endDay; d++) {
+    const b = d * 1440;
+    total += overlapWith(start, end, b,      b + 300);   // 0:00–5:00
+    total += overlapWith(start, end, b+1320, b+1440);    // 22:00–24:00
+  }
+  return total;
+}
+
+/**
+ * 勤怠詳細計算
+ * @returns {workMin, otMin, dnMin, dnOtMin} — すべて分単位
+ *
+ * 残業時間 (otMin)   : 実働 − 所定労働時間 (>0 の場合)
+ * 深夜労働時間 (dnMin): 22:00–5:00 に重なる実働時間
+ *   ※休憩は昼間から先に差し引く
+ * 深夜残業時間 (dnOtMin): 残業時間のうち 22:00–5:00 に重なる分
+ *   ※残業は勤務末尾から発生する前提（所定時間超過後の時間帯で判定）
+ */
+function calcDetail(clockIn, clockOut, breakMin, scheduledMin) {
+  if (!clockIn || !clockOut) return null;
+  const brk = breakMin    || 0;
+  const sch = scheduledMin || 480;
+
+  const [ih,im] = clockIn.split(':').map(Number);
+  const [oh,om] = clockOut.split(':').map(Number);
+  let inM  = ih*60 + im;
+  let outM = oh*60 + om;
+  if (outM <= inM) outM += 1440;  // 日またぎ対応
+
+  const span    = outM - inM;
+  const workMin = Math.max(0, span - brk);
+  const otMin   = Math.max(0, workMin - sch);
+
+  // 深夜労働時間: スパン全体の深夜重複から、休憩分を昼間優先で差し引く
+  const rawDN  = overlapWithDeepNight(inM, outM);
+  const rawReg = span - rawDN;
+  const brkDN  = Math.max(0, brk - Math.min(brk, rawReg)); // 昼間で吸収できなかった分
+  const dnMin  = Math.max(0, rawDN - brkDN);
+
+  // 深夜残業時間: 残業は勤務末尾 (所定超過後) に発生すると仮定
+  // 残業開始時刻 = 出勤 + 休憩 + 所定労働時間
+  let dnOtMin = 0;
+  if (otMin > 0) {
+    const otStart = inM + brk + sch;
+    dnOtMin = overlapWithDeepNight(otStart, outM);
+  }
+
+  return { workMin, otMin, dnMin, dnOtMin };
+}
+
+function fmtWork(min) {
+  if (min === null || min === undefined || min === '') return '-';
+  const h = Math.floor(min/60), m = min%60;
+  return h + '時間' + (m ? m+'分' : '');
+}
+
+function fmtChip(min) {
+  if (!min) return '-';
+  const h = Math.floor(min/60), m = min%60;
+  if (h === 0) return m + '分';
+  if (m === 0) return h + 'h';
+  return h + 'h' + m + 'm';
+}
+
+// ─────────────── Status ───────────────
+function getStatus(r) {
+  if (!r || !r.clockIn) return 'absent';
+  if (!r.clockOut)       return 'working';
+  return 'done';
+}
+const STATUS_LABEL = { absent:'未出勤', working:'出勤中', done:'退勤済み' };
+const STATUS_BADGE = { absent:'badge-absent', working:'badge-working', done:'badge-done' };
+
+// ─────────────── Actions ───────────────
+function clockIn(id) {
+  const r = getOrCreate(id, todayISO());
+  if (r.clockIn) return;
+  r.clockIn = nowHM();
+  save(); renderToday(); renderSummary();
+  toast('出勤を記録しました（' + r.clockIn + '）');
+}
+function clockOut(id) {
+  const r = getOrCreate(id, todayISO());
+  if (!r.clockIn || r.clockOut) return;
+  r.clockOut = nowHM();
+  save(); renderToday(); renderSummary();
+  toast('退勤を記録しました（' + r.clockOut + '）');
+}
+function toggleBreak(id, min) {
+  const r = getOrCreate(id, todayISO());
+  r.breakMin = (r.breakMin === min) ? 0 : min;
+  save(); renderToday();
+}
+function saveRemarks(id, val) {
+  const r = getOrCreate(id, todayISO());
+  r.remarks = val;
+  save();
+}
+function undoOut(id) {
+  const r = getRec(id, todayISO());
+  if (!r || !r.clockOut) return;
+  r.clockOut = null;
+  save(); renderToday(); renderSummary();
+  toast('退勤を取り消しました');
+}
+function undoIn(id) {
+  const r = getRec(id, todayISO());
+  if (!r || !r.clockIn) return;
+  r.clockIn = null; r.clockOut = null; r.breakMin = 0;
+  save(); renderToday(); renderSummary();
+  toast('出勤を取り消しました');
+}
+
+// ─────────────── Records ───────────────
+function getRec(empId, date) {
+  return records.find(r => r.employeeId === empId && r.date === date);
+}
+function getOrCreate(empId, date) {
+  let r = getRec(empId, date);
+  if (!r) {
+    const emp = employees.find(e => e.id === empId);
+    r = { id: Date.now()+Math.random(), employeeId: empId,
+          employeeName: emp ? emp.name : '',
+          date, clockIn: null, clockOut: null, breakMin: 0, remarks: '' };
+    records.push(r);
+  }
+  return r;
+}
+
+// ─────────────── Render Today ───────────────
+function renderToday() {
+  const grid  = document.getElementById('empGrid');
+  const empty = document.getElementById('empEmpty');
+
+  if (!employees.length) {
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const today  = todayISO();
+  const BREAKS = [15, 30, 45, 60, 75, 90];
+
+  grid.innerHTML = employees.map(emp => {
+    const r       = getRec(emp.id, today);
+    const st      = getStatus(r);
+    const ci      = r?.clockIn  || null;
+    const co      = r?.clockOut || null;
+    const brk     = r?.breakMin || 0;
+    const rem     = r?.remarks  || '';
+    const absent  = st === 'absent';
+    const working = st === 'working';
+    const done    = st === 'done';
+
+    // 退勤済みは確定値、出勤中は現在時刻で見込み計算
+    const coEst  = co || (ci ? nowHM() : null);
+    const det    = ci ? calcDetail(ci, coEst, brk, settings.scheduledMin) : null;
+    const isEst  = working; // まだ退勤していないので見込み
+
+    const ch = esc(emp.name.charAt(0) || '?');
+
+    const chipClass = (val, color) =>
+      `stat-chip-val ${val > 0 ? color : 'c-zero'}${isEst ? ' c-est' : ''}`;
+
+    return `
+<div class="card">
+  <div class="card-head">
+    <div class="avatar">${ch}</div>
+    <div class="emp-meta">
+      <div class="emp-name">${esc(emp.name)}</div>
+      <span class="badge ${STATUS_BADGE[st]}">${STATUS_LABEL[st]}</span>
+      ${det ? `<div class="work-dur">実働 ${fmtWork(det.workMin)}${isEst ? '（見込み）' : ''}</div>` : ''}
+    </div>
+  </div>
+  <div class="card-body">
+
+    <div class="time-row">
+      <div class="time-box">
+        <div class="time-lbl">出勤</div>
+        <div class="time-val${ci ? '' : ' empty'}">${ci || '--:--'}</div>
+      </div>
+      <div class="time-box">
+        <div class="time-lbl">退勤</div>
+        <div class="time-val${co ? '' : ' empty'}">${co || '--:--'}</div>
+      </div>
+    </div>
+
+    ${det ? `
+    <div class="extra-stats">
+      <div class="stat-chip">
+        <div class="stat-chip-lbl">残業時間</div>
+        <div class="${chipClass(det.otMin,'c-ot')}">${fmtChip(det.otMin)}</div>
+      </div>
+      <div class="stat-chip">
+        <div class="stat-chip-lbl">深夜労働</div>
+        <div class="${chipClass(det.dnMin,'c-dn')}">${fmtChip(det.dnMin)}</div>
+      </div>
+      <div class="stat-chip">
+        <div class="stat-chip-lbl">深夜残業</div>
+        <div class="${chipClass(det.dnOtMin,'c-dnot')}">${fmtChip(det.dnOtMin)}</div>
+      </div>
+    </div>` : ''}
+
+    <div class="sec-lbl">休憩時間</div>
+    <div class="break-row">
+      ${BREAKS.map(m => `
+        <button class="brk-btn${brk===m?' on':''}"
+                onclick="toggleBreak(${emp.id},${m})"
+                ${absent?'disabled':''}>${m}分</button>
+      `).join('')}
+    </div>
+
+    <textarea class="remarks" rows="2" placeholder="備考を入力..."
+              onchange="saveRemarks(${emp.id},this.value)">${esc(rem)}</textarea>
+
+    <div class="act-row">
+      <button class="btn btn-in"  onclick="clockIn(${emp.id})"  ${!absent ?'disabled':''}>出勤</button>
+      <button class="btn btn-out" onclick="clockOut(${emp.id})" ${!working?'disabled':''}>退勤</button>
+      <button class="btn btn-undo" onclick="${done?'undoOut':'undoIn'}(${emp.id})"
+              title="直前の操作を取り消し" ${absent?'disabled':''}>↩</button>
+    </div>
+
+  </div>
+</div>`;
+  }).join('');
+}
+
+// ─────────────── Summary bar ───────────────
+function renderSummary() {
+  const today = todayISO();
+  let absent=0, working=0, done=0;
+  employees.forEach(e => {
+    const s = getStatus(getRec(e.id, today));
+    if      (s==='absent')  absent++;
+    else if (s==='working') working++;
+    else                    done++;
+  });
+  document.getElementById('summaryBar').innerHTML = `
+    <div class="sum-item"><div class="sum-dot dot-working"></div>
+      <span class="sum-label">出勤中</span><span class="sum-count">${working}人</span></div>
+    <div class="sum-item"><div class="sum-dot dot-absent"></div>
+      <span class="sum-label">未出勤</span><span class="sum-count">${absent}人</span></div>
+    <div class="sum-item"><div class="sum-dot dot-done"></div>
+      <span class="sum-label">退勤済み</span><span class="sum-count">${done}人</span></div>
+    <div class="sum-item" style="margin-left:auto;color:var(--g500);font-size:12px;">
+      合計 ${employees.length}人</div>`;
+}
+
+// ─────────────── Render History ───────────────
+function renderHistory() {
+  const monthVal = document.getElementById('fMonth').value;
+  const empVal   = document.getElementById('fEmp').value;
+
+  let rows = [...records];
+  if (monthVal) rows = rows.filter(r => r.date.startsWith(monthVal));
+  if (empVal)   rows = rows.filter(r => String(r.employeeId) === empVal);
+
+  rows.sort((a,b) => a.date !== b.date
+    ? b.date.localeCompare(a.date)
+    : a.employeeName.localeCompare(b.employeeName,'ja'));
+
+  const tbody = document.getElementById('histTbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="10" class="no-data">データがありません</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => {
+    const det = calcDetail(r.clockIn, r.clockOut, r.breakMin, settings.scheduledMin);
+    return `<tr>
+      <td>${r.date}</td>
+      <td>${esc(r.employeeName)}</td>
+      <td>${r.clockIn  || '-'}</td>
+      <td>${r.clockOut || '-'}</td>
+      <td>${r.breakMin ? r.breakMin+'分' : '-'}</td>
+      <td>${det ? fmtWork(det.workMin) : '-'}</td>
+      <td class="${det && det.otMin   > 0 ? 'td-ot'   : ''}">${det ? fmtWork(det.otMin)   : '-'}</td>
+      <td class="${det && det.dnMin   > 0 ? 'td-dn'   : ''}">${det ? fmtWork(det.dnMin)   : '-'}</td>
+      <td class="${det && det.dnOtMin > 0 ? 'td-dnot' : ''}">${det ? fmtWork(det.dnOtMin) : '-'}</td>
+      <td style="max-width:160px;white-space:pre-wrap;word-break:break-all">${esc(r.remarks||'')}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─────────────── Render Employee List ───────────────
+function renderEmpList() {
+  const list  = document.getElementById('empList');
+  const empty = document.getElementById('empListEmpty');
+
+  if (!employees.length) {
+    list.innerHTML = '';
+    list.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  list.style.display  = 'block';
+  list.innerHTML = employees.map(e => `
+    <div class="emp-row">
+      <div class="avatar" style="width:38px;height:38px;font-size:15px;">${esc(e.name.charAt(0)||'?')}</div>
+      <div class="emp-row-name">${esc(e.name)}</div>
+      <button class="btn-del" onclick="showDelModal(${e.id})">削除</button>
+    </div>
+  `).join('');
+}
+
+function syncEmpFilter() {
+  const sel = document.getElementById('fEmp');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">全員</option>' +
+    employees.map(e =>
+      `<option value="${e.id}"${String(e.id)===cur?' selected':''}>${esc(e.name)}</option>`
+    ).join('');
+}
+
+function applySettingsUI() {
+  const h = Math.floor(settings.scheduledMin / 60);
+  const m = settings.scheduledMin % 60;
+  document.getElementById('setH').value = h;
+  document.getElementById('setM').value = m;
+}
+
+// ─────────────── Settings ───────────────
+function saveScheduledTime() {
+  const h = parseInt(document.getElementById('setH').value) || 0;
+  const m = parseInt(document.getElementById('setM').value) || 0;
+  const total = h*60 + m;
+  if (total < 60 || total > 1200) { toast('所定労働時間は1時間〜20時間で入力してください'); return; }
+  settings.scheduledMin = total;
+  saveSettings();
+  toast('所定労働時間を ' + h + '時間' + (m ? m+'分' : '') + ' に保存しました');
+}
+
+// ─────────────── Add / Delete employee ───────────────
+function addEmployee() {
+  const inp  = document.getElementById('newName');
+  const name = inp.value.trim();
+  if (!name)                                { toast('名前を入力してください'); return; }
+  if (employees.some(e => e.name === name)) { toast('同じ名前が既に存在します'); return; }
+  employees.push({ id: Date.now(), name });
+  save(); inp.value = '';
+  renderEmpList(); renderToday(); renderSummary(); syncEmpFilter();
+  toast(name + ' を追加しました');
+}
+
+function showDelModal(id) {
+  const e = employees.find(e => e.id === id);
+  if (!e) return;
+  delTarget = id;
+  document.getElementById('delMsg').textContent =
+    `「${e.name}」を削除しますか？この従業員の勤怠データも全て削除されます。`;
+  document.getElementById('delOverlay').style.display = 'flex';
+}
+function closeDelModal() {
+  document.getElementById('delOverlay').style.display = 'none';
+  delTarget = null;
+}
+function confirmDelete() {
+  if (!delTarget) return;
+  const e = employees.find(e => e.id === delTarget);
+  employees = employees.filter(e => e.id !== delTarget);
+  records   = records.filter(r => r.employeeId !== delTarget);
+  save();
+  renderEmpList(); renderToday(); renderSummary(); renderHistory(); syncEmpFilter();
+  closeDelModal();
+  if (e) toast(e.name + ' を削除しました');
+}
+
+// ─────────────── CSV Export ───────────────
+function exportCSV() {
+  const monthVal = document.getElementById('fMonth').value;
+  const empVal   = document.getElementById('fEmp').value;
+
+  let rows = [...records];
+  if (monthVal) rows = rows.filter(r => r.date.startsWith(monthVal));
+  if (empVal)   rows = rows.filter(r => String(r.employeeId) === empVal);
+
+  if (!rows.length) { toast('出力するデータがありません'); return; }
+
+  rows.sort((a,b) => a.date !== b.date
+    ? a.date.localeCompare(b.date)
+    : a.employeeName.localeCompare(b.employeeName,'ja'));
+
+  const schH = Math.floor(settings.scheduledMin/60);
+  const schM = settings.scheduledMin%60;
+  const schLabel = schH + '時間' + (schM ? schM+'分' : '');
+
+  const HEADS = [
+    '日付','従業員名','出勤時刻','退勤時刻','休憩時間(分)',
+    `所定労働時間(分)[${schLabel}]`,
+    '実働時間(分)','実働時間',
+    '残業時間(分)','残業時間',
+    '深夜労働時間(分)','深夜労働時間',
+    '深夜残業時間(分)','深夜残業時間',
+    '備考'
+  ];
+
+  const csvRows = rows.map(r => {
+    const det = calcDetail(r.clockIn, r.clockOut, r.breakMin, settings.scheduledMin);
+    return [
+      r.date,
+      r.employeeName,
+      r.clockIn  || '',
+      r.clockOut || '',
+      r.breakMin || 0,
+      settings.scheduledMin,
+      det ? det.workMin  : '',
+      det ? fmtWork(det.workMin)  : '',
+      det ? det.otMin    : '',
+      det ? fmtWork(det.otMin)    : '',
+      det ? det.dnMin    : '',
+      det ? fmtWork(det.dnMin)    : '',
+      det ? det.dnOtMin  : '',
+      det ? fmtWork(det.dnOtMin)  : '',
+      r.remarks || ''
+    ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
+  });
+
+  const csv   = '﻿' + [HEADS.join(','), ...csvRows].join('\r\n');
+  const blob  = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url   = URL.createObjectURL(blob);
+  const label = monthVal || todayISO().slice(0,7);
+  const fname = `勤怠管理_${label}.csv`;
+
+  const a = Object.assign(document.createElement('a'), { href:url, download:fname });
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  toast('CSVをダウンロードしました');
+}
+
+// ─────────────── Tab switch ───────────────
+function switchTab(tab) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('on'));
+  document.getElementById('tab-' + tab).classList.add('on');
+  document.querySelector(`.nav-btn[data-tab="${tab}"]`).classList.add('on');
+  if (tab === 'history')   renderHistory();
+  if (tab === 'employees') { renderEmpList(); applySettingsUI(); }
+}
+
+// ─────────────── Toast ───────────────
+let toastTimer;
+function toast(msg) {
+  clearTimeout(toastTimer);
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+// ─────────────── Helpers ───────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─────────────── Clock ───────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('hdrDate').textContent =
+    now.toLocaleDateString('ja-JP',{ year:'numeric', month:'long', day:'numeric', weekday:'short' });
+  document.getElementById('hdrTime').textContent =
+    now.toLocaleTimeString('ja-JP',{ hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+
+// ─────────────── Init ───────────────
+(function init() {
+  document.getElementById('fMonth').value = todayISO().slice(0,7);
+  applySettingsUI();
+  syncEmpFilter();
+  renderSummary();
+  renderToday();
+  updateClock();
+  setInterval(updateClock,  1000);
+  setInterval(renderToday, 60000); // 出勤中カードの見込み値を毎分更新
+})();
+</script>
+</body>
+</html>
