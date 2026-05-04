@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -7,6 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="勤怠管理">
   <title>勤怠管理システム</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -41,7 +43,6 @@
       padding-bottom: env(safe-area-inset-bottom);
     }
 
-    /* ── Header ── */
     .hdr {
       background: var(--blue);
       color: #fff;
@@ -60,7 +61,6 @@
     .hdr-date  { font-size: 12px; opacity: .85; }
     .hdr-time  { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
-    /* ── Summary bar ── */
     .summary-bar {
       background: #fff;
       padding: 10px 20px;
@@ -78,7 +78,6 @@
     .sum-label { color: var(--g600); }
     .sum-count { font-weight: 700; }
 
-    /* ── Nav ── */
     .nav {
       display: flex;
       background: #fff;
@@ -102,12 +101,10 @@
     }
     .nav-btn.on { color: var(--blue); border-bottom-color: var(--blue); }
 
-    /* ── Content ── */
     .content { padding: 16px; max-width: 1100px; margin: 0 auto; }
     .panel { display: none; }
     .panel.on { display: block; }
 
-    /* ── Employee grid ── */
     .emp-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
@@ -155,7 +152,6 @@
 
     .card-body { padding: 13px 15px; }
 
-    /* time boxes */
     .time-row { display: flex; gap: 10px; margin-bottom: 10px; }
     .time-box {
       flex: 1;
@@ -173,7 +169,6 @@
     }
     .time-val.empty { color: var(--g300); }
 
-    /* ── Extra stats chips ── */
     .extra-stats {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -203,7 +198,6 @@
     .c-zero { color: var(--g400); font-weight: 500; }
     .c-est  { font-style: italic; opacity: .72; }
 
-    /* break */
     .sec-lbl   { font-size: 12px; font-weight: 600; color: var(--g600); margin-bottom: 7px; }
     .break-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
     .brk-btn {
@@ -221,7 +215,6 @@
     .brk-btn.on       { border-color: var(--amber); background: #fef3c7; color: #92400e; }
     .brk-btn:disabled { opacity: .4; cursor: not-allowed; }
 
-    /* remarks */
     .remarks {
       width: 100%;
       padding: 9px 11px;
@@ -238,7 +231,6 @@
     }
     .remarks:focus { border-color: var(--blue); }
 
-    /* action buttons */
     .act-row { display: flex; gap: 8px; }
     .btn {
       flex: 1;
@@ -265,13 +257,11 @@
       font-size: 17px;
     }
 
-    /* ── Empty state ── */
     .empty-state { text-align: center; padding: 64px 24px; color: var(--g400); }
     .empty-icon  { font-size: 52px; margin-bottom: 14px; }
     .empty-msg   { font-size: 16px; margin-bottom: 6px; }
     .empty-sub   { font-size: 14px; }
 
-    /* ── History ── */
     .filter-bar {
       background: #fff;
       border-radius: var(--radius);
@@ -329,7 +319,6 @@
     .td-dn   { color: var(--purple); font-weight: 600; }
     .td-dnot { color: var(--pink);   font-weight: 600; }
 
-    /* ── Export bar ── */
     .export-bar {
       background: #fff;
       border-top: 1px solid var(--g200);
@@ -357,7 +346,6 @@
     }
     .btn-exp:active { filter: brightness(.92); }
 
-    /* ── Settings card ── */
     .settings-card {
       background: #fff;
       border-radius: var(--radius);
@@ -407,7 +395,6 @@
     }
     .btn-save-set:active { background: var(--blue-dk); }
 
-    /* ── Employee management ── */
     .add-form {
       background: #fff;
       border-radius: var(--radius);
@@ -459,7 +446,6 @@
     }
     .btn-del:active { background: #fee2e2; }
 
-    /* ── Toast ── */
     .toast {
       position: fixed;
       bottom: 90px;
@@ -480,7 +466,6 @@
     }
     .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-    /* ── Modal ── */
     .overlay {
       position: fixed;
       inset: 0;
@@ -497,6 +482,74 @@
     .modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
     .btn-cancel { padding: 10px 18px; background: var(--g100); color: var(--g700); border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
     .btn-danger { padding: 10px 18px; background: var(--red);   color: #fff;       border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; }
+
+    /* Supabase */
+    .sb-status { font-size: 13px; font-weight: 700; }
+    .sb-status.connected    { color: var(--green); }
+    .sb-status.disconnected { color: var(--g400); }
+    .sb-input-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+    .sb-input {
+      width: 100%;
+      padding: 9px 13px;
+      border: 1.5px solid var(--g200);
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      color: var(--g800);
+    }
+    .sb-input:focus { border-color: var(--blue); }
+    .sb-btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .btn-sb-connect {
+      padding: 9px 18px;
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-sb-connect:active { background: var(--blue-dk); }
+    .btn-sb-disconnect {
+      padding: 9px 14px;
+      background: #fff;
+      border: 1.5px solid var(--red);
+      color: var(--red);
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      display: none;
+    }
+    .btn-sb-migrate {
+      padding: 9px 14px;
+      background: var(--g100);
+      color: var(--g700);
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      display: none;
+    }
+    .code-block {
+      background: var(--g900);
+      color: #e2e8f0;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      overflow-x: auto;
+      white-space: pre;
+      margin: 8px 0;
+      font-family: 'Courier New', monospace;
+      line-height: 1.6;
+    }
+    details summary { cursor: pointer; user-select: none; }
+    details summary::-webkit-details-marker { color: var(--blue); }
 
     @media (min-width: 768px) { .nav { top: 67px; } }
     @media (max-width: 480px) {
@@ -572,6 +625,66 @@
   <!-- ===== EMPLOYEES ===== -->
   <div id="tab-employees" class="panel">
 
+    <!-- Supabase 接続設定 -->
+    <div class="settings-card">
+      <h3>☁ Supabase 複数端末同期</h3>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span id="sbStatus" class="sb-status disconnected">● 未接続</span>
+        <span style="font-size:12px;color:var(--g500)">接続すると複数端末でリアルタイム同期されます</span>
+      </div>
+      <div class="sb-input-row">
+        <input id="sbUrl" class="sb-input" type="url" placeholder="Project URL（https://xxxx.supabase.co）">
+        <input id="sbKey" class="sb-input" type="password" placeholder="anon / public key">
+      </div>
+      <div class="sb-btn-row">
+        <button class="btn-sb-connect" onclick="connectSupabase()">接続する</button>
+        <button id="btnSbDisconnect" class="btn-sb-disconnect" onclick="disconnectSupabase()">切断</button>
+        <button id="btnSbMigrate" class="btn-sb-migrate" onclick="migrateToSupabase()">ローカルデータをアップロード</button>
+      </div>
+      <details>
+        <summary style="font-size:12px;color:var(--blue);padding:4px 0">▶ Supabase 初期設定手順</summary>
+        <div style="font-size:12px;color:var(--g600);margin-top:10px;line-height:1.8">
+          <p>1. <strong>supabase.com</strong> でプロジェクトを作成</p>
+          <p>2. <strong>SQL Editor</strong> で以下を実行：</p>
+          <div style="position:relative">
+            <pre class="code-block" id="sqlBlock">create table if not exists employees (
+  id bigint primary key,
+  name text not null
+);
+
+create table if not exists records (
+  id text primary key,
+  employee_id bigint not null,
+  employee_name text not null,
+  date text not null,
+  clock_in text,
+  clock_out text,
+  break_min integer default 0,
+  remarks text default '',
+  unique (employee_id, date)
+);
+
+create table if not exists settings (
+  id integer primary key default 1,
+  scheduled_min integer default 480
+);
+
+alter table employees enable row level security;
+alter table records enable row level security;
+alter table settings enable row level security;
+
+create policy "public_access" on employees for all using (true) with check (true);
+create policy "public_access" on records for all using (true) with check (true);
+create policy "public_access" on settings for all using (true) with check (true);</pre>
+            <button onclick="copySql()" style="position:absolute;top:8px;right:8px;padding:4px 10px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit">コピー</button>
+          </div>
+          <p style="margin-top:6px">3. <strong>Settings → API</strong> から Project URL と anon public キーをコピーして上に入力</p>
+          <p>4. 「接続する」→ 既存データがある場合は「ローカルデータをアップロード」で同期</p>
+        </div>
+      </details>
+    </div>
+
+    <!-- 所定労働時間設定 -->
     <div class="settings-card">
       <h3>⚙ 設定</h3>
       <div class="settings-row">
@@ -612,10 +725,11 @@
 </div>
 
 <script>
-// ─────────────── Storage ───────────────
+// ─────────────── Storage keys ───────────────
 const SK_EMP = 'kt_employees';
 const SK_REC = 'kt_records';
 const SK_SET = 'kt_settings';
+const SK_SB  = 'kt_supabase';
 
 let employees = JSON.parse(localStorage.getItem(SK_EMP) || '[]');
 let records   = JSON.parse(localStorage.getItem(SK_REC) || '[]');
@@ -630,6 +744,214 @@ function saveSettings() {
   localStorage.setItem(SK_SET, JSON.stringify(settings));
 }
 
+// ─────────────── Supabase ───────────────
+let sb        = null;
+let sbChannel = null;
+
+function initSupabase(url, key) {
+  try {
+    sb = window.supabase.createClient(url, key);
+    return true;
+  } catch (e) {
+    sb = null;
+    return false;
+  }
+}
+
+async function connectSupabase() {
+  const url = document.getElementById('sbUrl').value.trim();
+  const key = document.getElementById('sbKey').value.trim();
+  if (!url || !key) { toast('URLとKeyを入力してください'); return; }
+  if (!url.startsWith('https://')) { toast('URLは https:// で始まる必要があります'); return; }
+  if (!initSupabase(url, key)) { toast('クライアント初期化に失敗しました'); return; }
+
+  toast('接続中...');
+  try {
+    await loadFromSupabase();
+    localStorage.setItem(SK_SB, JSON.stringify({ url, key }));
+    setupRealtime();
+    updateSbUI(true, url, key);
+    toast('Supabaseに接続しました ✓');
+  } catch (e) {
+    sb = null;
+    toast('接続失敗: ' + (e.message || String(e)));
+  }
+}
+
+function disconnectSupabase() {
+  if (sbChannel) { sbChannel.unsubscribe(); sbChannel = null; }
+  sb = null;
+  localStorage.removeItem(SK_SB);
+  updateSbUI(false);
+  toast('接続を解除しました');
+}
+
+function updateSbUI(connected, url, key) {
+  const status = document.getElementById('sbStatus');
+  const btnDis = document.getElementById('btnSbDisconnect');
+  const btnMig = document.getElementById('btnSbMigrate');
+  const inUrl  = document.getElementById('sbUrl');
+  const inKey  = document.getElementById('sbKey');
+
+  if (status) {
+    status.textContent = connected ? '● 接続済み' : '● 未接続';
+    status.className   = 'sb-status ' + (connected ? 'connected' : 'disconnected');
+  }
+  if (btnDis) btnDis.style.display = connected ? '' : 'none';
+  if (btnMig) btnMig.style.display = connected ? '' : 'none';
+  if (connected && url) { inUrl.value = url; inKey.value = key || ''; }
+}
+
+// ─────────────── DB mappers ───────────────
+function mapEmp(e) {
+  return { id: e.id, name: e.name };
+}
+function mapRec(r) {
+  return {
+    id:           r.id,
+    employeeId:   r.employee_id,
+    employeeName: r.employee_name,
+    date:         r.date,
+    clockIn:      r.clock_in  || null,
+    clockOut:     r.clock_out || null,
+    breakMin:     r.break_min || 0,
+    remarks:      r.remarks   || ''
+  };
+}
+function toDbRec(r) {
+  return {
+    id:            String(r.id),
+    employee_id:   r.employeeId,
+    employee_name: r.employeeName,
+    date:          r.date,
+    clock_in:      r.clockIn  || null,
+    clock_out:     r.clockOut || null,
+    break_min:     r.breakMin || 0,
+    remarks:       r.remarks  || ''
+  };
+}
+
+// ─────────────── Supabase CRUD ───────────────
+async function loadFromSupabase() {
+  const [{ data: emps, error: e1 }, { data: recs, error: e2 }, { data: sets, error: e3 }] =
+    await Promise.all([
+      sb.from('employees').select('*').order('id'),
+      sb.from('records').select('*'),
+      sb.from('settings').select('*').eq('id', 1).maybeSingle()
+    ]);
+  if (e1) throw e1;
+  if (e2) throw e2;
+  if (emps) { employees = emps.map(mapEmp); localStorage.setItem(SK_EMP, JSON.stringify(employees)); }
+  if (recs) { records   = recs.map(mapRec); localStorage.setItem(SK_REC, JSON.stringify(records)); }
+  if (sets) { settings.scheduledMin = sets.scheduled_min; saveSettings(); }
+  renderAll();
+}
+
+async function sbUpsertRecord(r) {
+  if (!sb) return;
+  const { error } = await sb.from('records').upsert(toDbRec(r));
+  if (error) toast('同期エラー: ' + error.message);
+}
+
+async function sbDeleteRecord(empId, date) {
+  if (!sb) return;
+  await sb.from('records').delete().eq('employee_id', empId).eq('date', date);
+}
+
+async function sbUpsertEmployee(emp) {
+  if (!sb) return;
+  const { error } = await sb.from('employees').upsert({ id: emp.id, name: emp.name });
+  if (error) toast('同期エラー: ' + error.message);
+}
+
+async function sbDeleteEmployee(id) {
+  if (!sb) return;
+  await sb.from('records').delete().eq('employee_id', id);
+  const { error } = await sb.from('employees').delete().eq('id', id);
+  if (error) toast('同期エラー: ' + error.message);
+}
+
+async function sbUpsertSettings() {
+  if (!sb) return;
+  const { error } = await sb.from('settings').upsert({ id: 1, scheduled_min: settings.scheduledMin });
+  if (error) toast('同期エラー: ' + error.message);
+}
+
+async function migrateToSupabase() {
+  if (!sb) { toast('先にSupabaseに接続してください'); return; }
+  toast('アップロード中...');
+  try {
+    if (employees.length) {
+      const { error } = await sb.from('employees')
+        .upsert(employees.map(e => ({ id: e.id, name: e.name })));
+      if (error) throw error;
+    }
+    if (records.length) {
+      const { error } = await sb.from('records').upsert(records.map(toDbRec));
+      if (error) throw error;
+    }
+    const { error: se } = await sb.from('settings')
+      .upsert({ id: 1, scheduled_min: settings.scheduledMin });
+    if (se) throw se;
+    toast('アップロード完了 ✓');
+  } catch (e) {
+    toast('エラー: ' + (e.message || String(e)));
+  }
+}
+
+// ─────────────── Real-time ───────────────
+function setupRealtime() {
+  if (!sb) return;
+  if (sbChannel) { sbChannel.unsubscribe(); sbChannel = null; }
+
+  sbChannel = sb.channel('kintai-rt')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, handleEmpChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'records' },   handleRecChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' },  handleSetChange)
+    .subscribe();
+}
+
+function handleEmpChange(payload) {
+  if (payload.eventType === 'DELETE') {
+    const id = payload.old.id;
+    employees = employees.filter(e => e.id !== id);
+    records   = records.filter(r => r.employeeId !== id);
+    localStorage.setItem(SK_REC, JSON.stringify(records));
+  } else {
+    const emp = mapEmp(payload.new);
+    const i   = employees.findIndex(e => e.id === emp.id);
+    if (i >= 0) employees[i] = emp; else employees.push(emp);
+  }
+  localStorage.setItem(SK_EMP, JSON.stringify(employees));
+  renderEmpList(); renderToday(); renderSummary(); syncEmpFilter();
+}
+
+function handleRecChange(payload) {
+  if (payload.eventType === 'DELETE') {
+    records = records.filter(r => String(r.id) !== String(payload.old.id));
+  } else {
+    const incoming = mapRec(payload.new);
+    const i = records.findIndex(r =>
+      r.employeeId === incoming.employeeId && r.date === incoming.date
+    );
+    if (i >= 0) records[i] = incoming; else records.push(incoming);
+  }
+  localStorage.setItem(SK_REC, JSON.stringify(records));
+  renderToday(); renderSummary();
+}
+
+function handleSetChange(payload) {
+  if (payload.new) {
+    settings.scheduledMin = payload.new.scheduled_min;
+    saveSettings(); applySettingsUI();
+  }
+}
+
+function copySql() {
+  navigator.clipboard.writeText(document.getElementById('sqlBlock').textContent)
+    .then(() => toast('SQLをコピーしました'));
+}
+
 // ─────────────── Date / Time ───────────────
 function todayISO() {
   const d = new Date();
@@ -641,72 +963,49 @@ function nowHM() {
 }
 function pad(n) { return String(n).padStart(2,'0'); }
 
-// ─────────────── Time calculation helpers ───────────────
+// ─────────────── Time calculation ───────────────
 function overlapWith(s1, e1, s2, e2) {
   return Math.max(0, Math.min(e1, e2) - Math.max(s1, s2));
 }
-
-// 深夜帯: 22:00–24:00 (1320–1440) + 0:00–5:00 (0–300) を繰り返し判定
 function overlapWithDeepNight(start, end) {
   let total = 0;
   const startDay = Math.floor(start / 1440);
   const endDay   = Math.floor(end   / 1440) + 1;
   for (let d = startDay; d <= endDay; d++) {
     const b = d * 1440;
-    total += overlapWith(start, end, b,      b + 300);   // 0:00–5:00
-    total += overlapWith(start, end, b+1320, b+1440);    // 22:00–24:00
+    total += overlapWith(start, end, b,      b + 300);
+    total += overlapWith(start, end, b+1320, b+1440);
   }
   return total;
 }
-
-/**
- * 勤怠詳細計算
- * @returns {workMin, otMin, dnMin, dnOtMin} — すべて分単位
- *
- * 残業時間 (otMin)   : 実働 − 所定労働時間 (>0 の場合)
- * 深夜労働時間 (dnMin): 22:00–5:00 に重なる実働時間
- *   ※休憩は昼間から先に差し引く
- * 深夜残業時間 (dnOtMin): 残業時間のうち 22:00–5:00 に重なる分
- *   ※残業は勤務末尾から発生する前提（所定時間超過後の時間帯で判定）
- */
 function calcDetail(clockIn, clockOut, breakMin, scheduledMin) {
   if (!clockIn || !clockOut) return null;
   const brk = breakMin    || 0;
   const sch = scheduledMin || 480;
-
   const [ih,im] = clockIn.split(':').map(Number);
   const [oh,om] = clockOut.split(':').map(Number);
   let inM  = ih*60 + im;
   let outM = oh*60 + om;
-  if (outM <= inM) outM += 1440;  // 日またぎ対応
-
+  if (outM <= inM) outM += 1440;
   const span    = outM - inM;
   const workMin = Math.max(0, span - brk);
   const otMin   = Math.max(0, workMin - sch);
-
-  // 深夜労働時間: スパン全体の深夜重複から、休憩分を昼間優先で差し引く
-  const rawDN  = overlapWithDeepNight(inM, outM);
-  const rawReg = span - rawDN;
-  const brkDN  = Math.max(0, brk - Math.min(brk, rawReg)); // 昼間で吸収できなかった分
-  const dnMin  = Math.max(0, rawDN - brkDN);
-
-  // 深夜残業時間: 残業は勤務末尾 (所定超過後) に発生すると仮定
-  // 残業開始時刻 = 出勤 + 休憩 + 所定労働時間
-  let dnOtMin = 0;
+  const rawDN   = overlapWithDeepNight(inM, outM);
+  const rawReg  = span - rawDN;
+  const brkDN   = Math.max(0, brk - Math.min(brk, rawReg));
+  const dnMin   = Math.max(0, rawDN - brkDN);
+  let dnOtMin   = 0;
   if (otMin > 0) {
     const otStart = inM + brk + sch;
     dnOtMin = overlapWithDeepNight(otStart, outM);
   }
-
   return { workMin, otMin, dnMin, dnOtMin };
 }
-
 function fmtWork(min) {
   if (min === null || min === undefined || min === '') return '-';
   const h = Math.floor(min/60), m = min%60;
   return h + '時間' + (m ? m+'分' : '');
 }
-
 function fmtChip(min) {
   if (!min) return '-';
   const h = Math.floor(min/60), m = min%60;
@@ -731,6 +1030,7 @@ function clockIn(id) {
   r.clockIn = nowHM();
   save(); renderToday(); renderSummary();
   toast('出勤を記録しました（' + r.clockIn + '）');
+  sbUpsertRecord(r);
 }
 function clockOut(id) {
   const r = getOrCreate(id, todayISO());
@@ -738,16 +1038,19 @@ function clockOut(id) {
   r.clockOut = nowHM();
   save(); renderToday(); renderSummary();
   toast('退勤を記録しました（' + r.clockOut + '）');
+  sbUpsertRecord(r);
 }
 function toggleBreak(id, min) {
   const r = getOrCreate(id, todayISO());
   r.breakMin = (r.breakMin === min) ? 0 : min;
   save(); renderToday();
+  sbUpsertRecord(r);
 }
 function saveRemarks(id, val) {
   const r = getOrCreate(id, todayISO());
   r.remarks = val;
   save();
+  sbUpsertRecord(r);
 }
 function undoOut(id) {
   const r = getRec(id, todayISO());
@@ -755,13 +1058,17 @@ function undoOut(id) {
   r.clockOut = null;
   save(); renderToday(); renderSummary();
   toast('退勤を取り消しました');
+  sbUpsertRecord(r);
 }
 function undoIn(id) {
   const r = getRec(id, todayISO());
   if (!r || !r.clockIn) return;
+  const today = todayISO();
+  const empId = r.employeeId;
   r.clockIn = null; r.clockOut = null; r.breakMin = 0;
   save(); renderToday(); renderSummary();
   toast('出勤を取り消しました');
+  sbDeleteRecord(empId, today);
 }
 
 // ─────────────── Records ───────────────
@@ -772,9 +1079,12 @@ function getOrCreate(empId, date) {
   let r = getRec(empId, date);
   if (!r) {
     const emp = employees.find(e => e.id === empId);
-    r = { id: Date.now()+Math.random(), employeeId: empId,
-          employeeName: emp ? emp.name : '',
-          date, clockIn: null, clockOut: null, breakMin: 0, remarks: '' };
+    r = {
+      id: `${empId}_${date}`,
+      employeeId: empId,
+      employeeName: emp ? emp.name : '',
+      date, clockIn: null, clockOut: null, breakMin: 0, remarks: ''
+    };
     records.push(r);
   }
   return r;
@@ -784,35 +1094,29 @@ function getOrCreate(empId, date) {
 function renderToday() {
   const grid  = document.getElementById('empGrid');
   const empty = document.getElementById('empEmpty');
-
   if (!employees.length) {
     grid.innerHTML = '';
     empty.style.display = 'block';
     return;
   }
   empty.style.display = 'none';
-
   const today  = todayISO();
   const BREAKS = [15, 30, 45, 60, 75, 90];
 
   grid.innerHTML = employees.map(emp => {
-    const r       = getRec(emp.id, today);
-    const st      = getStatus(r);
-    const ci      = r?.clockIn  || null;
-    const co      = r?.clockOut || null;
-    const brk     = r?.breakMin || 0;
-    const rem     = r?.remarks  || '';
+    const r      = getRec(emp.id, today);
+    const st     = getStatus(r);
+    const ci     = r?.clockIn  || null;
+    const co     = r?.clockOut || null;
+    const brk    = r?.breakMin || 0;
+    const rem    = r?.remarks  || '';
     const absent  = st === 'absent';
     const working = st === 'working';
     const done    = st === 'done';
-
-    // 退勤済みは確定値、出勤中は現在時刻で見込み計算
     const coEst  = co || (ci ? nowHM() : null);
     const det    = ci ? calcDetail(ci, coEst, brk, settings.scheduledMin) : null;
-    const isEst  = working; // まだ退勤していないので見込み
-
-    const ch = esc(emp.name.charAt(0) || '?');
-
+    const isEst  = working;
+    const ch     = esc(emp.name.charAt(0) || '?');
     const chipClass = (val, color) =>
       `stat-chip-val ${val > 0 ? color : 'c-zero'}${isEst ? ' c-est' : ''}`;
 
@@ -827,7 +1131,6 @@ function renderToday() {
     </div>
   </div>
   <div class="card-body">
-
     <div class="time-row">
       <div class="time-box">
         <div class="time-lbl">出勤</div>
@@ -838,7 +1141,6 @@ function renderToday() {
         <div class="time-val${co ? '' : ' empty'}">${co || '--:--'}</div>
       </div>
     </div>
-
     ${det ? `
     <div class="extra-stats">
       <div class="stat-chip">
@@ -854,7 +1156,6 @@ function renderToday() {
         <div class="${chipClass(det.dnOtMin,'c-dnot')}">${fmtChip(det.dnOtMin)}</div>
       </div>
     </div>` : ''}
-
     <div class="sec-lbl">休憩時間</div>
     <div class="break-row">
       ${BREAKS.map(m => `
@@ -863,23 +1164,20 @@ function renderToday() {
                 ${absent?'disabled':''}>${m}分</button>
       `).join('')}
     </div>
-
     <textarea class="remarks" rows="2" placeholder="備考を入力..."
               onchange="saveRemarks(${emp.id},this.value)">${esc(rem)}</textarea>
-
     <div class="act-row">
       <button class="btn btn-in"  onclick="clockIn(${emp.id})"  ${!absent ?'disabled':''}>出勤</button>
       <button class="btn btn-out" onclick="clockOut(${emp.id})" ${!working?'disabled':''}>退勤</button>
       <button class="btn btn-undo" onclick="${done?'undoOut':'undoIn'}(${emp.id})"
               title="直前の操作を取り消し" ${absent?'disabled':''}>↩</button>
     </div>
-
   </div>
 </div>`;
   }).join('');
 }
 
-// ─────────────── Summary bar ───────────────
+// ─────────────── Summary ───────────────
 function renderSummary() {
   const today = todayISO();
   let absent=0, working=0, done=0;
@@ -900,15 +1198,13 @@ function renderSummary() {
       合計 ${employees.length}人</div>`;
 }
 
-// ─────────────── Render History ───────────────
+// ─────────────── History ───────────────
 function renderHistory() {
   const monthVal = document.getElementById('fMonth').value;
   const empVal   = document.getElementById('fEmp').value;
-
   let rows = [...records];
   if (monthVal) rows = rows.filter(r => r.date.startsWith(monthVal));
   if (empVal)   rows = rows.filter(r => String(r.employeeId) === empVal);
-
   rows.sort((a,b) => a.date !== b.date
     ? b.date.localeCompare(a.date)
     : a.employeeName.localeCompare(b.employeeName,'ja'));
@@ -918,7 +1214,6 @@ function renderHistory() {
     tbody.innerHTML = '<tr><td colspan="10" class="no-data">データがありません</td></tr>';
     return;
   }
-
   tbody.innerHTML = rows.map(r => {
     const det = calcDetail(r.clockIn, r.clockOut, r.breakMin, settings.scheduledMin);
     return `<tr>
@@ -936,11 +1231,10 @@ function renderHistory() {
   }).join('');
 }
 
-// ─────────────── Render Employee List ───────────────
+// ─────────────── Employee list ───────────────
 function renderEmpList() {
   const list  = document.getElementById('empList');
   const empty = document.getElementById('empListEmpty');
-
   if (!employees.length) {
     list.innerHTML = '';
     list.style.display = 'none';
@@ -956,6 +1250,10 @@ function renderEmpList() {
       <button class="btn-del" onclick="showDelModal(${e.id})">削除</button>
     </div>
   `).join('');
+}
+
+function renderAll() {
+  renderEmpList(); renderToday(); renderSummary(); syncEmpFilter();
 }
 
 function syncEmpFilter() {
@@ -983,6 +1281,7 @@ function saveScheduledTime() {
   settings.scheduledMin = total;
   saveSettings();
   toast('所定労働時間を ' + h + '時間' + (m ? m+'分' : '') + ' に保存しました');
+  sbUpsertSettings();
 }
 
 // ─────────────── Add / Delete employee ───────────────
@@ -991,10 +1290,12 @@ function addEmployee() {
   const name = inp.value.trim();
   if (!name)                                { toast('名前を入力してください'); return; }
   if (employees.some(e => e.name === name)) { toast('同じ名前が既に存在します'); return; }
-  employees.push({ id: Date.now(), name });
+  const emp = { id: Date.now(), name };
+  employees.push(emp);
   save(); inp.value = '';
   renderEmpList(); renderToday(); renderSummary(); syncEmpFilter();
   toast(name + ' を追加しました');
+  sbUpsertEmployee(emp);
 }
 
 function showDelModal(id) {
@@ -1018,17 +1319,16 @@ function confirmDelete() {
   renderEmpList(); renderToday(); renderSummary(); renderHistory(); syncEmpFilter();
   closeDelModal();
   if (e) toast(e.name + ' を削除しました');
+  sbDeleteEmployee(delTarget);
 }
 
 // ─────────────── CSV Export ───────────────
 function exportCSV() {
   const monthVal = document.getElementById('fMonth').value;
   const empVal   = document.getElementById('fEmp').value;
-
   let rows = [...records];
   if (monthVal) rows = rows.filter(r => r.date.startsWith(monthVal));
   if (empVal)   rows = rows.filter(r => String(r.employeeId) === empVal);
-
   if (!rows.length) { toast('出力するデータがありません'); return; }
 
   rows.sort((a,b) => a.date !== b.date
@@ -1038,47 +1338,31 @@ function exportCSV() {
   const schH = Math.floor(settings.scheduledMin/60);
   const schM = settings.scheduledMin%60;
   const schLabel = schH + '時間' + (schM ? schM+'分' : '');
-
   const HEADS = [
     '日付','従業員名','出勤時刻','退勤時刻','休憩時間(分)',
     `所定労働時間(分)[${schLabel}]`,
-    '実働時間(分)','実働時間',
-    '残業時間(分)','残業時間',
-    '深夜労働時間(分)','深夜労働時間',
-    '深夜残業時間(分)','深夜残業時間',
-    '備考'
+    '実働時間(分)','実働時間','残業時間(分)','残業時間',
+    '深夜労働時間(分)','深夜労働時間','深夜残業時間(分)','深夜残業時間','備考'
   ];
-
   const csvRows = rows.map(r => {
     const det = calcDetail(r.clockIn, r.clockOut, r.breakMin, settings.scheduledMin);
     return [
-      r.date,
-      r.employeeName,
-      r.clockIn  || '',
-      r.clockOut || '',
-      r.breakMin || 0,
+      r.date, r.employeeName, r.clockIn||'', r.clockOut||'', r.breakMin||0,
       settings.scheduledMin,
-      det ? det.workMin  : '',
-      det ? fmtWork(det.workMin)  : '',
-      det ? det.otMin    : '',
-      det ? fmtWork(det.otMin)    : '',
-      det ? det.dnMin    : '',
-      det ? fmtWork(det.dnMin)    : '',
-      det ? det.dnOtMin  : '',
-      det ? fmtWork(det.dnOtMin)  : '',
-      r.remarks || ''
+      det?det.workMin:'', det?fmtWork(det.workMin):'',
+      det?det.otMin:'',   det?fmtWork(det.otMin):'',
+      det?det.dnMin:'',   det?fmtWork(det.dnMin):'',
+      det?det.dnOtMin:'', det?fmtWork(det.dnOtMin):'',
+      r.remarks||''
     ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
   });
 
-  const csv   = '﻿' + [HEADS.join(','), ...csvRows].join('\r\n');
-  const blob  = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url   = URL.createObjectURL(blob);
-  const label = monthVal || todayISO().slice(0,7);
-  const fname = `勤怠管理_${label}.csv`;
-
+  const csv  = '﻿' + [HEADS.join(','), ...csvRows].join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const fname = `勤怠管理_${monthVal || todayISO().slice(0,7)}.csv`;
   const a = Object.assign(document.createElement('a'), { href:url, download:fname });
-  document.body.appendChild(a);
-  a.click();
+  document.body.appendChild(a); a.click();
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
   toast('CSVをダウンロードしました');
 }
@@ -1120,7 +1404,7 @@ function updateClock() {
 }
 
 // ─────────────── Init ───────────────
-(function init() {
+(async function init() {
   document.getElementById('fMonth').value = todayISO().slice(0,7);
   applySettingsUI();
   syncEmpFilter();
@@ -1128,7 +1412,18 @@ function updateClock() {
   renderToday();
   updateClock();
   setInterval(updateClock,  1000);
-  setInterval(renderToday, 60000); // 出勤中カードの見込み値を毎分更新
+  setInterval(renderToday, 60000);
+
+  const cfg = JSON.parse(localStorage.getItem(SK_SB) || 'null');
+  if (cfg && cfg.url && cfg.key && initSupabase(cfg.url, cfg.key)) {
+    try {
+      await loadFromSupabase();
+      setupRealtime();
+      updateSbUI(true, cfg.url, cfg.key);
+    } catch (e) {
+      sb = null;
+    }
+  }
 })();
 </script>
 </body>
