@@ -1,0 +1,1702 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="勤怠管理">
+  <title>勤怠管理システム</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue:    #2563eb;
+      --blue-dk: #1d4ed8;
+      --green:   #16a34a;
+      --green-dk:#15803d;
+      --red:     #dc2626;
+      --amber:   #d97706;
+      --purple:  #7c3aed;
+      --pink:    #be185d;
+      --g50:  #f9fafb;
+      --g100: #f3f4f6;
+      --g200: #e5e7eb;
+      --g300: #d1d5db;
+      --g400: #9ca3af;
+      --g500: #6b7280;
+      --g600: #4b5563;
+      --g700: #374151;
+      --g800: #1f2937;
+      --g900: #111827;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: -apple-system, 'Hiragino Sans', 'Yu Gothic UI', sans-serif;
+      background: var(--g100);
+      color: var(--g900);
+      min-height: 100vh;
+      -webkit-tap-highlight-color: transparent;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .hdr {
+      background: var(--blue);
+      color: #fff;
+      padding: 14px 20px;
+      padding-top: calc(14px + env(safe-area-inset-top));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      box-shadow: 0 2px 6px rgba(0,0,0,.25);
+    }
+    .hdr-title { font-size: 20px; font-weight: 800; letter-spacing: -.3px; }
+    .hdr-clock { text-align: right; }
+    .hdr-date  { font-size: 12px; opacity: .85; }
+    .hdr-time  { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    .summary-bar {
+      background: #fff;
+      padding: 10px 20px;
+      display: flex;
+      gap: 16px;
+      border-bottom: 1px solid var(--g200);
+      font-size: 13px;
+      overflow-x: auto;
+    }
+    .sum-item  { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+    .sum-dot   { width: 10px; height: 10px; border-radius: 50%; }
+    .dot-absent  { background: var(--g300); }
+    .dot-working { background: var(--green); }
+    .dot-done    { background: var(--blue); }
+    .sum-label { color: var(--g600); }
+    .sum-count { font-weight: 700; }
+
+    .nav {
+      display: flex;
+      background: #fff;
+      border-bottom: 1px solid var(--g200);
+      position: sticky;
+      top: 62px;
+      z-index: 100;
+    }
+    .nav-btn {
+      flex: 1;
+      padding: 13px 6px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--g500);
+      text-align: center;
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      transition: color .15s, border-color .15s;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .nav-btn.on { color: var(--blue); border-bottom-color: var(--blue); }
+
+    .content { padding: 16px; max-width: 1100px; margin: 0 auto; }
+    .panel { display: none; }
+    .panel.on { display: block; }
+
+    .emp-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+      gap: 14px;
+    }
+    .card {
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      overflow: hidden;
+    }
+    .card-head {
+      padding: 13px 15px;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      border-bottom: 1px solid var(--g100);
+    }
+    .avatar {
+      width: 46px; height: 46px;
+      border-radius: 50%;
+      background: var(--blue);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 19px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+    .emp-meta  { flex: 1; min-width: 0; }
+    .emp-name  { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 9px;
+      border-radius: 20px;
+      margin-top: 4px;
+    }
+    .badge-absent  { background: var(--g100); color: var(--g600); }
+    .badge-working { background: #dcfce7; color: #15803d; }
+    .badge-done    { background: #dbeafe; color: #1e40af; }
+    .badge-prev    { background: #fef3c7; color: #92400e; }
+    .work-dur { font-size: 11px; color: var(--g500); margin-top: 3px; }
+
+    .card-body { padding: 13px 15px; }
+
+    /* 前日未退勤アラート */
+    .prev-section {
+      background: #fffbeb;
+      border: 1.5px solid #fbbf24;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+    }
+    .prev-header {
+      font-size: 12px;
+      font-weight: 700;
+      color: #92400e;
+      margin-bottom: 8px;
+    }
+    .btn-prev-out {
+      display: block;
+      width: 100%;
+      padding: 8px 14px;
+      background: var(--amber);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    .btn-prev-out:active { filter: brightness(.9); }
+
+    .card-divider {
+      height: 1px;
+      background: var(--g200);
+      margin: 12px -15px;
+    }
+
+    /* 複数シフト表示 */
+    .shifts-list { margin-bottom: 10px; }
+    .shift-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+      border-bottom: 1px solid var(--g100);
+      font-size: 14px;
+    }
+    .shift-row:last-child { border-bottom: none; }
+    .shift-lbl {
+      font-size: 11px;
+      color: var(--g500);
+      width: 44px;
+      flex-shrink: 0;
+    }
+    .shift-time {
+      font-size: 18px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: var(--g800);
+    }
+    .shift-time.empty { color: var(--g300); }
+    .shift-arr { color: var(--g400); font-size: 13px; }
+    .shift-next { font-size: 11px; color: var(--amber); font-weight: 600; }
+
+    .time-row { display: flex; gap: 10px; margin-bottom: 10px; }
+    .time-box {
+      flex: 1;
+      text-align: center;
+      background: var(--g50);
+      border-radius: 8px;
+      padding: 9px 6px;
+    }
+    .time-lbl { font-size: 11px; color: var(--g500); margin-bottom: 3px; }
+    .time-val {
+      font-size: 20px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: var(--g800);
+    }
+    .time-val.empty { color: var(--g300); }
+    .time-next { font-size: 11px; color: var(--amber); font-weight: 600; display: block; margin-top: 2px; }
+
+    .extra-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .stat-chip {
+      background: var(--g50);
+      border-radius: 7px;
+      padding: 7px 4px;
+      text-align: center;
+    }
+    .stat-chip-lbl {
+      font-size: 10px;
+      color: var(--g500);
+      margin-bottom: 2px;
+      white-space: nowrap;
+    }
+    .stat-chip-val {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--g800);
+    }
+    .c-ot   { color: var(--red); }
+    .c-dn   { color: var(--purple); }
+    .c-dnot { color: var(--pink); }
+    .c-zero { color: var(--g400); font-weight: 500; }
+    .c-est  { font-style: italic; opacity: .72; }
+
+    .sec-lbl   { font-size: 12px; font-weight: 600; color: var(--g600); margin-bottom: 7px; }
+    .break-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .brk-btn {
+      padding: 6px 11px;
+      border-radius: 6px;
+      border: 1.5px solid var(--g300);
+      background: #fff;
+      color: var(--g700);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all .12s;
+      font-family: inherit;
+    }
+    .brk-btn.on       { border-color: var(--amber); background: #fef3c7; color: #92400e; }
+    .brk-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    .remarks {
+      width: 100%;
+      padding: 9px 11px;
+      border: 1.5px solid var(--g200);
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: none;
+      outline: none;
+      color: var(--g800);
+      background: #fff;
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+    .remarks:focus { border-color: var(--blue); }
+
+    .act-row { display: flex; gap: 8px; }
+    .btn {
+      flex: 1;
+      padding: 13px 8px;
+      border-radius: 8px;
+      border: none;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: filter .12s, transform .1s;
+    }
+    .btn:active:not(:disabled) { transform: scale(.96); }
+    .btn:disabled { opacity: .38; cursor: not-allowed; transform: none !important; }
+    .btn-in   { background: var(--green); color: #fff; }
+    .btn-in:hover:not(:disabled)  { filter: brightness(1.08); }
+    .btn-out  { background: var(--red);   color: #fff; }
+    .btn-out:hover:not(:disabled) { filter: brightness(1.08); }
+    .btn-undo {
+      flex: 0 0 auto;
+      padding: 13px 15px;
+      background: var(--g100);
+      color: var(--g700);
+      font-size: 17px;
+    }
+
+    .empty-state { text-align: center; padding: 64px 24px; color: var(--g400); }
+    .empty-icon  { font-size: 52px; margin-bottom: 14px; }
+    .empty-msg   { font-size: 16px; margin-bottom: 6px; }
+    .empty-sub   { font-size: 14px; }
+
+    .filter-bar {
+      background: #fff;
+      border-radius: var(--radius);
+      padding: 13px 16px;
+      margin-bottom: 14px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      box-shadow: 0 1px 3px rgba(0,0,0,.07);
+    }
+    .f-lbl { font-size: 13px; font-weight: 600; color: var(--g600); white-space: nowrap; }
+    .f-inp {
+      padding: 8px 11px;
+      border: 1.5px solid var(--g200);
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      color: var(--g800);
+    }
+    .f-inp:focus { border-color: var(--blue); }
+
+    .tbl-wrap {
+      background: #fff;
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,.07);
+      overflow-x: auto;
+    }
+    table { width: 100%; border-collapse: collapse; min-width: 960px; }
+    th {
+      background: var(--g50);
+      padding: 11px 12px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--g600);
+      border-bottom: 1px solid var(--g200);
+      white-space: nowrap;
+    }
+    th.h-ot   { color: var(--red); }
+    th.h-dn   { color: var(--purple); }
+    th.h-dnot { color: var(--pink); }
+    td {
+      padding: 11px 12px;
+      font-size: 14px;
+      color: var(--g800);
+      border-bottom: 1px solid var(--g100);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td      { background: var(--g50); }
+    .no-data { text-align: center; padding: 48px; color: var(--g400); font-size: 15px; }
+    .td-ot   { color: var(--red);    font-weight: 600; }
+    .td-dn   { color: var(--purple); font-weight: 600; }
+    .td-dnot { color: var(--pink);   font-weight: 600; }
+
+    .export-bar {
+      background: #fff;
+      border-top: 1px solid var(--g200);
+      padding: 13px 16px;
+      padding-bottom: calc(13px + env(safe-area-inset-bottom));
+      position: sticky;
+      bottom: 0;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .btn-exp {
+      padding: 12px 22px;
+      background: var(--green);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-exp:active { filter: brightness(.92); }
+
+    .settings-card {
+      background: #fff;
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.07);
+    }
+    .settings-card h3 {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--g600);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 11px;
+    }
+    .settings-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .settings-lbl  { font-size: 14px; color: var(--g700); white-space: nowrap; font-weight: 500; }
+    .settings-unit { font-size: 14px; color: var(--g600); }
+    .settings-num {
+      width: 60px;
+      padding: 8px 6px;
+      border: 1.5px solid var(--g200);
+      border-radius: 8px;
+      font-size: 15px;
+      font-family: inherit;
+      outline: none;
+      color: var(--g800);
+      text-align: center;
+    }
+    .settings-num:focus { border-color: var(--blue); }
+    .btn-save-set {
+      margin-left: auto;
+      padding: 9px 18px;
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-save-set:active { background: var(--blue-dk); }
+
+    .add-form {
+      background: #fff;
+      border-radius: var(--radius);
+      padding: 15px 16px;
+      margin-bottom: 14px;
+      display: flex;
+      gap: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.07);
+    }
+    .add-input {
+      flex: 1;
+      padding: 10px 13px;
+      border: 1.5px solid var(--g200);
+      border-radius: 8px;
+      font-size: 15px;
+      font-family: inherit;
+      outline: none;
+      color: var(--g800);
+    }
+    .add-input:focus { border-color: var(--blue); }
+    .btn-add {
+      padding: 10px 20px;
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .btn-add:active { background: var(--blue-dk); }
+
+    .emp-list { background: #fff; border-radius: var(--radius); box-shadow: 0 1px 3px rgba(0,0,0,.07); overflow: hidden; }
+    .emp-row  { display: flex; align-items: center; padding: 13px 16px; gap: 12px; border-bottom: 1px solid var(--g100); }
+    .emp-row:last-child { border-bottom: none; }
+    .emp-row-name { flex: 1; font-size: 15px; font-weight: 500; }
+    .btn-del {
+      padding: 7px 15px;
+      background: #fff;
+      border: 1.5px solid var(--red);
+      color: var(--red);
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-del:active { background: #fee2e2; }
+
+    .toast {
+      position: fixed;
+      bottom: 90px;
+      left: 50%;
+      transform: translateX(-50%) translateY(14px);
+      background: rgba(17,24,39,.88);
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 500;
+      opacity: 0;
+      transition: opacity .25s, transform .25s;
+      pointer-events: none;
+      z-index: 999;
+      white-space: nowrap;
+      backdrop-filter: blur(4px);
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.45);
+      z-index: 300;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .modal { background: #fff; border-radius: 16px; padding: 24px; max-width: 380px; width: 100%; box-shadow: 0 8px 32px rgba(0,0,0,.18); }
+    .modal h3 { font-size: 18px; margin-bottom: 10px; }
+    .modal p  { font-size: 14px; color: var(--g600); margin-bottom: 22px; line-height: 1.5; }
+    .modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
+    .btn-cancel { padding: 10px 18px; background: var(--g100); color: var(--g700); border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .btn-danger { padding: 10px 18px; background: var(--red);   color: #fff;       border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; }
+
+    /* Supabase */
+    .sb-status { font-size: 13px; font-weight: 700; }
+    .sb-status.connected    { color: var(--green); }
+    .sb-status.disconnected { color: var(--g400); }
+    .sb-input-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+    .sb-input {
+      width: 100%;
+      padding: 9px 13px;
+      border: 1.5px solid var(--g200);
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      color: var(--g800);
+    }
+    .sb-input:focus { border-color: var(--blue); }
+    .sb-btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .btn-sb-connect {
+      padding: 9px 18px;
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-sb-connect:active { background: var(--blue-dk); }
+    .btn-sb-disconnect {
+      padding: 9px 14px;
+      background: #fff;
+      border: 1.5px solid var(--red);
+      color: var(--red);
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      display: none;
+    }
+    .btn-sb-migrate {
+      padding: 9px 14px;
+      background: var(--g100);
+      color: var(--g700);
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      display: none;
+    }
+    .code-block {
+      background: var(--g900);
+      color: #e2e8f0;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      overflow-x: auto;
+      white-space: pre;
+      margin: 8px 0;
+      font-family: 'Courier New', monospace;
+      line-height: 1.6;
+    }
+    details summary { cursor: pointer; user-select: none; }
+    details summary::-webkit-details-marker { color: var(--blue); }
+
+    @media (min-width: 768px) { .nav { top: 67px; } }
+    @media (max-width: 480px) {
+      .emp-grid { grid-template-columns: 1fr; }
+      .hdr-title { font-size: 17px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-title">⏱ 勤怠管理</div>
+  <div class="hdr-clock">
+    <div class="hdr-date" id="hdrDate"></div>
+    <div class="hdr-time" id="hdrTime"></div>
+  </div>
+</div>
+
+<div class="summary-bar" id="summaryBar"></div>
+
+<div class="nav">
+  <div class="nav-btn on" data-tab="today"     onclick="switchTab('today')">今日の勤怠</div>
+  <div class="nav-btn"    data-tab="history"   onclick="switchTab('history')">履歴</div>
+  <div class="nav-btn"    data-tab="employees" onclick="switchTab('employees')">従業員管理</div>
+</div>
+
+<div class="content">
+
+  <!-- ===== TODAY ===== -->
+  <div id="tab-today" class="panel on">
+    <div class="emp-grid" id="empGrid"></div>
+    <div class="empty-state" id="empEmpty" style="display:none">
+      <div class="empty-icon">👥</div>
+      <div class="empty-msg">従業員が登録されていません</div>
+      <div class="empty-sub">「従業員管理」タブから追加してください</div>
+    </div>
+  </div>
+
+  <!-- ===== HISTORY ===== -->
+  <div id="tab-history" class="panel">
+    <div class="filter-bar">
+      <span class="f-lbl">月:</span>
+      <input type="month" class="f-inp" id="fMonth" onchange="renderHistory()">
+      <span class="f-lbl">従業員:</span>
+      <select class="f-inp" id="fEmp" onchange="renderHistory()">
+        <option value="">全員</option>
+      </select>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>日付</th>
+            <th>従業員名</th>
+            <th>出勤</th>
+            <th>退勤</th>
+            <th>シフト数</th>
+            <th>休憩</th>
+            <th>実働時間</th>
+            <th class="h-ot">残業時間</th>
+            <th class="h-dn">深夜労働</th>
+            <th class="h-dnot">深夜残業</th>
+            <th>備考</th>
+          </tr>
+        </thead>
+        <tbody id="histTbody"></tbody>
+      </table>
+    </div>
+    <div class="export-bar">
+      <button class="btn-exp" onclick="exportCSV()">📥 CSV出力</button>
+    </div>
+  </div>
+
+  <!-- ===== EMPLOYEES ===== -->
+  <div id="tab-employees" class="panel">
+
+    <div class="settings-card">
+      <h3>☁ Supabase 複数端末同期</h3>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span id="sbStatus" class="sb-status disconnected">● 未接続</span>
+        <span style="font-size:12px;color:var(--g500)">接続すると複数端末でリアルタイム同期されます</span>
+      </div>
+      <div class="sb-input-row">
+        <input id="sbUrl" class="sb-input" type="url" placeholder="Project URL（https://xxxx.supabase.co）">
+        <input id="sbKey" class="sb-input" type="password" placeholder="anon / public key">
+      </div>
+      <div class="sb-btn-row">
+        <button class="btn-sb-connect" onclick="connectSupabase()">接続する</button>
+        <button id="btnSbDisconnect" class="btn-sb-disconnect" onclick="disconnectSupabase()">切断</button>
+        <button id="btnSbMigrate" class="btn-sb-migrate" onclick="migrateToSupabase()">ローカルデータをアップロード</button>
+      </div>
+      <details>
+        <summary style="font-size:12px;color:var(--blue);padding:4px 0">▶ Supabase 初期設定手順</summary>
+        <div style="font-size:12px;color:var(--g600);margin-top:10px;line-height:1.8">
+          <p>1. <strong>supabase.com</strong> でプロジェクトを作成</p>
+          <p>2. <strong>SQL Editor</strong> で以下を実行：</p>
+          <div style="position:relative">
+            <pre class="code-block" id="sqlBlock">create table if not exists employees (
+  id bigint primary key,
+  name text not null
+);
+
+create table if not exists records (
+  id text primary key,
+  employee_id bigint not null,
+  employee_name text not null,
+  date text not null,
+  clock_in text,
+  clock_out text,
+  break_min integer default 0,
+  shifts text default '[]',
+  remarks text default '',
+  unique (employee_id, date)
+);
+
+create table if not exists settings (
+  id integer primary key default 1,
+  scheduled_min integer default 480
+);
+
+alter table employees enable row level security;
+alter table records enable row level security;
+alter table settings enable row level security;
+
+create policy "public_access" on employees for all using (true) with check (true);
+create policy "public_access" on records for all using (true) with check (true);
+create policy "public_access" on settings for all using (true) with check (true);</pre>
+            <button onclick="copySql()" style="position:absolute;top:8px;right:8px;padding:4px 10px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit">コピー</button>
+          </div>
+          <p style="margin-top:6px">※既存テーブルに shifts カラムを追加する場合：<br>
+          <code style="background:var(--g100);padding:2px 6px;border-radius:4px;font-size:11px">alter table records add column if not exists shifts text default '[]';</code></p>
+          <p style="margin-top:6px">3. <strong>Settings → API</strong> から Project URL と anon public キーをコピーして上に入力</p>
+          <p>4. 「接続する」→ 既存データがある場合は「ローカルデータをアップロード」で同期</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="settings-card">
+      <h3>⚙ 設定</h3>
+      <div class="settings-row">
+        <span class="settings-lbl">所定労働時間：</span>
+        <input type="number" id="setH" class="settings-num" min="0" max="23" value="8">
+        <span class="settings-unit">時間</span>
+        <input type="number" id="setM" class="settings-num" min="0" max="59" step="15" value="0">
+        <span class="settings-unit">分</span>
+        <button class="btn-save-set" onclick="saveScheduledTime()">保存</button>
+      </div>
+    </div>
+
+    <div class="add-form">
+      <input id="newName" class="add-input" type="text" placeholder="従業員名を入力..." maxlength="20"
+             onkeydown="if(event.key==='Enter')addEmployee()">
+      <button class="btn-add" onclick="addEmployee()">追加</button>
+    </div>
+    <div class="emp-list" id="empList"></div>
+    <div class="empty-state" id="empListEmpty" style="display:none">
+      <div class="empty-icon">➕</div>
+      <div class="empty-msg">従業員が登録されていません</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="overlay" id="delOverlay" style="display:none">
+  <div class="modal">
+    <h3>従業員を削除</h3>
+    <p id="delMsg"></p>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeDelModal()">キャンセル</button>
+      <button class="btn-danger" onclick="confirmDelete()">削除する</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────── Storage keys ───────────────
+const SK_EMP = 'kt_employees';
+const SK_REC = 'kt_records';
+const SK_SET = 'kt_settings';
+const SK_SB  = 'kt_supabase';
+
+let employees = JSON.parse(localStorage.getItem(SK_EMP) || '[]');
+let records   = JSON.parse(localStorage.getItem(SK_REC) || '[]');
+let settings  = JSON.parse(localStorage.getItem(SK_SET) || '{"scheduledMin":480}');
+let delTarget = null;
+
+function save() {
+  localStorage.setItem(SK_EMP, JSON.stringify(employees));
+  localStorage.setItem(SK_REC, JSON.stringify(records));
+}
+function saveSettings() {
+  localStorage.setItem(SK_SET, JSON.stringify(settings));
+}
+
+// ─────────────── Supabase ───────────────
+let sb        = null;
+let sbChannel = null;
+
+function initSupabase(url, key) {
+  try {
+    sb = window.supabase.createClient(url, key);
+    return true;
+  } catch (e) {
+    sb = null;
+    return false;
+  }
+}
+
+async function connectSupabase() {
+  const url = document.getElementById('sbUrl').value.trim();
+  const key = document.getElementById('sbKey').value.trim();
+  if (!url || !key) { toast('URLとKeyを入力してください'); return; }
+  if (!url.startsWith('https://')) { toast('URLは https:// で始まる必要があります'); return; }
+  if (!initSupabase(url, key)) { toast('クライアント初期化に失敗しました'); return; }
+
+  toast('接続中...');
+  try {
+    await loadFromSupabase();
+    localStorage.setItem(SK_SB, JSON.stringify({ url, key }));
+    setupRealtime();
+    updateSbUI(true, url, key);
+    toast('Supabaseに接続しました ✓');
+  } catch (e) {
+    sb = null;
+    toast('接続失敗: ' + (e.message || String(e)));
+  }
+}
+
+function disconnectSupabase() {
+  if (sbChannel) { sbChannel.unsubscribe(); sbChannel = null; }
+  sb = null;
+  localStorage.removeItem(SK_SB);
+  updateSbUI(false);
+  toast('接続を解除しました');
+}
+
+function updateSbUI(connected, url, key) {
+  const status = document.getElementById('sbStatus');
+  const btnDis = document.getElementById('btnSbDisconnect');
+  const btnMig = document.getElementById('btnSbMigrate');
+  const inUrl  = document.getElementById('sbUrl');
+  const inKey  = document.getElementById('sbKey');
+
+  if (status) {
+    status.textContent = connected ? '● 接続済み' : '● 未接続';
+    status.className   = 'sb-status ' + (connected ? 'connected' : 'disconnected');
+  }
+  if (btnDis) btnDis.style.display = connected ? '' : 'none';
+  if (btnMig) btnMig.style.display = connected ? '' : 'none';
+  if (connected && url) { inUrl.value = url; inKey.value = key || ''; }
+}
+
+// ─────────────── DB mappers ───────────────
+function mapEmp(e) {
+  return { id: e.id, name: e.name };
+}
+function mapRec(r) {
+  let shifts;
+  try {
+    if (r.shifts) {
+      shifts = typeof r.shifts === 'string' ? JSON.parse(r.shifts) : r.shifts;
+    } else {
+      shifts = r.clock_in ? [{ in: r.clock_in, out: r.clock_out || null }] : [];
+    }
+  } catch(e) {
+    shifts = r.clock_in ? [{ in: r.clock_in, out: r.clock_out || null }] : [];
+  }
+  return {
+    id:           r.id,
+    employeeId:   r.employee_id,
+    employeeName: r.employee_name,
+    date:         r.date,
+    shifts:       shifts,
+    breakMin:     r.break_min || 0,
+    remarks:      r.remarks   || ''
+  };
+}
+function toDbRec(r) {
+  const first = r.shifts && r.shifts[0] ? r.shifts[0] : {};
+  const last  = r.shifts && r.shifts.length ? r.shifts[r.shifts.length - 1] : {};
+  return {
+    id:            String(r.id),
+    employee_id:   r.employeeId,
+    employee_name: r.employeeName,
+    date:          r.date,
+    clock_in:      first.in  || null,
+    clock_out:     last.out  || null,
+    break_min:     r.breakMin || 0,
+    shifts:        JSON.stringify(r.shifts || []),
+    remarks:       r.remarks  || ''
+  };
+}
+
+// ─────────────── Supabase CRUD ───────────────
+async function loadFromSupabase() {
+  const [{ data: emps, error: e1 }, { data: recs, error: e2 }, { data: sets, error: e3 }] =
+    await Promise.all([
+      sb.from('employees').select('*').order('id'),
+      sb.from('records').select('*'),
+      sb.from('settings').select('*').eq('id', 1).maybeSingle()
+    ]);
+  if (e1) throw e1;
+  if (e2) throw e2;
+  if (emps) { employees = emps.map(mapEmp); localStorage.setItem(SK_EMP, JSON.stringify(employees)); }
+  if (recs) { records   = recs.map(mapRec); localStorage.setItem(SK_REC, JSON.stringify(records)); }
+  if (sets) { settings.scheduledMin = sets.scheduled_min; saveSettings(); }
+  renderAll();
+}
+
+async function sbUpsertRecord(r) {
+  if (!sb) return;
+  const { error } = await sb.from('records').upsert(toDbRec(r));
+  if (error) toast('同期エラー: ' + error.message);
+}
+
+async function sbDeleteRecord(empId, date) {
+  if (!sb) return;
+  await sb.from('records').delete().eq('employee_id', empId).eq('date', date);
+}
+
+async function sbUpsertEmployee(emp) {
+  if (!sb) return;
+  const { error } = await sb.from('employees').upsert({ id: emp.id, name: emp.name });
+  if (error) toast('同期エラー: ' + error.message);
+}
+
+async function sbDeleteEmployee(id) {
+  if (!sb) return;
+  await sb.from('records').delete().eq('employee_id', id);
+  const { error } = await sb.from('employees').delete().eq('id', id);
+  if (error) toast('同期エラー: ' + error.message);
+}
+
+async function sbUpsertSettings() {
+  if (!sb) return;
+  const { error } = await sb.from('settings').upsert({ id: 1, scheduled_min: settings.scheduledMin });
+  if (error) toast('同期エラー: ' + error.message);
+}
+
+async function migrateToSupabase() {
+  if (!sb) { toast('先にSupabaseに接続してください'); return; }
+  toast('アップロード中...');
+  try {
+    if (employees.length) {
+      const { error } = await sb.from('employees')
+        .upsert(employees.map(e => ({ id: e.id, name: e.name })));
+      if (error) throw error;
+    }
+    if (records.length) {
+      const { error } = await sb.from('records').upsert(records.map(toDbRec));
+      if (error) throw error;
+    }
+    const { error: se } = await sb.from('settings')
+      .upsert({ id: 1, scheduled_min: settings.scheduledMin });
+    if (se) throw se;
+    toast('アップロード完了 ✓');
+  } catch (e) {
+    toast('エラー: ' + (e.message || String(e)));
+  }
+}
+
+// ─────────────── Real-time ───────────────
+function setupRealtime() {
+  if (!sb) return;
+  if (sbChannel) { sbChannel.unsubscribe(); sbChannel = null; }
+
+  sbChannel = sb.channel('kintai-rt')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, handleEmpChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'records' },   handleRecChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' },  handleSetChange)
+    .subscribe();
+}
+
+function handleEmpChange(payload) {
+  if (payload.eventType === 'DELETE') {
+    const id = payload.old.id;
+    employees = employees.filter(e => e.id !== id);
+    records   = records.filter(r => r.employeeId !== id);
+    localStorage.setItem(SK_REC, JSON.stringify(records));
+  } else {
+    const emp = mapEmp(payload.new);
+    const i   = employees.findIndex(e => e.id === emp.id);
+    if (i >= 0) employees[i] = emp; else employees.push(emp);
+  }
+  localStorage.setItem(SK_EMP, JSON.stringify(employees));
+  renderEmpList(); renderToday(); renderSummary(); syncEmpFilter();
+}
+
+function handleRecChange(payload) {
+  if (payload.eventType === 'DELETE') {
+    records = records.filter(r => String(r.id) !== String(payload.old.id));
+  } else {
+    const incoming = mapRec(payload.new);
+    const i = records.findIndex(r =>
+      r.employeeId === incoming.employeeId && r.date === incoming.date
+    );
+    if (i >= 0) records[i] = incoming; else records.push(incoming);
+  }
+  localStorage.setItem(SK_REC, JSON.stringify(records));
+  renderToday(); renderSummary();
+}
+
+function handleSetChange(payload) {
+  if (payload.new) {
+    settings.scheduledMin = payload.new.scheduled_min;
+    saveSettings(); applySettingsUI();
+  }
+}
+
+function copySql() {
+  navigator.clipboard.writeText(document.getElementById('sqlBlock').textContent)
+    .then(() => toast('SQLをコピーしました'));
+}
+
+// ─────────────── Date / Time ───────────────
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function nowHM() {
+  const d = new Date();
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function pad(n) { return String(n).padStart(2,'0'); }
+
+// 退勤時刻が日付を跨いでいる場合「翌HH:MM」表示
+function dispOut(inTime, outTime) {
+  if (!outTime) return '--:--';
+  const [ih, im] = inTime.split(':').map(Number);
+  const [oh, om] = outTime.split(':').map(Number);
+  if (oh * 60 + om < ih * 60 + im) return '翌' + outTime;
+  return outTime;
+}
+
+// ─────────────── Time calculation ───────────────
+function overlapWith(s1, e1, s2, e2) {
+  return Math.max(0, Math.min(e1, e2) - Math.max(s1, s2));
+}
+function overlapWithDeepNight(start, end) {
+  let total = 0;
+  const startDay = Math.floor(start / 1440);
+  const endDay   = Math.floor(end   / 1440) + 1;
+  for (let d = startDay; d <= endDay; d++) {
+    const b = d * 1440;
+    total += overlapWith(start, end, b,      b + 300);
+    total += overlapWith(start, end, b+1320, b+1440);
+  }
+  return total;
+}
+
+// shifts: [{in: "HH:MM", out: "HH:MM"|null}, ...]
+function calcDetail(shifts, breakMin, scheduledMin) {
+  if (!shifts || !shifts.length || !shifts[0].in) return null;
+
+  const brk = breakMin    || 0;
+  const sch = scheduledMin || 480;
+  let hasEstimate = false;
+  const pairs = [];
+  let prevOutM = -Infinity;
+
+  for (const s of shifts) {
+    if (!s.in) continue;
+    const [ih, im] = s.in.split(':').map(Number);
+    let inM = ih * 60 + im;
+    // 前シフト終了より前なら翌日扱い
+    if (inM <= prevOutM) inM += 1440;
+
+    let outM;
+    if (s.out) {
+      const [oh, om] = s.out.split(':').map(Number);
+      outM = oh * 60 + om;
+      if (outM <= inM) outM += 1440; // 日跨ぎ
+    } else {
+      const d = new Date();
+      outM = d.getHours() * 60 + d.getMinutes();
+      if (outM <= inM) outM += 1440;
+      hasEstimate = true;
+    }
+
+    pairs.push([inM, outM]);
+    prevOutM = outM;
+  }
+
+  if (!pairs.length) return null;
+
+  let totalSpan = 0;
+  let totalDN   = 0;
+  for (const [inM, outM] of pairs) {
+    totalSpan += outM - inM;
+    totalDN   += overlapWithDeepNight(inM, outM);
+  }
+
+  const workMin = Math.max(0, totalSpan - brk);
+  const otMin   = Math.max(0, workMin - sch);
+  const rawReg  = totalSpan - totalDN;
+  const brkDN   = Math.max(0, brk - Math.min(brk, rawReg));
+  const dnMin   = Math.max(0, totalDN - brkDN);
+
+  // 深夜残業: 残業開始以降の深夜重複を合算
+  let dnOtMin = 0;
+  if (otMin > 0) {
+    const otStartAtSpan = sch + brk;
+    let spanAccum = 0;
+    for (const [inM, outM] of pairs) {
+      const shiftSpan = outM - inM;
+      if (spanAccum + shiftSpan > otStartAtSpan) {
+        const otStartInShift = inM + Math.max(0, otStartAtSpan - spanAccum);
+        dnOtMin += overlapWithDeepNight(otStartInShift, outM);
+      }
+      spanAccum += shiftSpan;
+    }
+  }
+
+  return { workMin, otMin, dnMin, dnOtMin, isEstimate: hasEstimate };
+}
+
+function fmtWork(min) {
+  if (min === null || min === undefined || min === '') return '-';
+  const h = Math.floor(min/60), m = min%60;
+  return h + '時間' + (m ? m+'分' : '');
+}
+function fmtChip(min) {
+  if (!min) return '-';
+  const h = Math.floor(min/60), m = min%60;
+  if (h === 0) return m + '分';
+  if (m === 0) return h + 'h';
+  return h + 'h' + m + 'm';
+}
+
+// ─────────────── Status ───────────────
+// r: 今日のレコード（またはnull）
+function getStatus(r) {
+  if (!r || !r.shifts || !r.shifts.length) return 'absent';
+  const last = r.shifts[r.shifts.length - 1];
+  return last.out ? 'done' : 'working';
+}
+const STATUS_LABEL = { absent:'未出勤', working:'出勤中', done:'退勤済み' };
+const STATUS_BADGE = { absent:'badge-absent', working:'badge-working', done:'badge-done' };
+
+// 前日以前の退勤未打刻レコードを取得
+function getPrevUnfinished(empId) {
+  const today = todayISO();
+  const matches = records.filter(r =>
+    r.employeeId === empId &&
+    r.date < today &&
+    r.shifts && r.shifts.length > 0 &&
+    !r.shifts[r.shifts.length - 1].out
+  );
+  if (!matches.length) return null;
+  return matches.sort((a, b) => b.date.localeCompare(a.date))[0];
+}
+
+// ─────────────── Actions ───────────────
+function clockIn(id) {
+  const r = getOrCreate(id, todayISO());
+  const lastShift = r.shifts.length ? r.shifts[r.shifts.length - 1] : null;
+  if (lastShift && !lastShift.out) {
+    toast('まず退勤してください'); return;
+  }
+  const time = nowHM();
+  r.shifts.push({ in: time, out: null });
+  save(); renderToday(); renderSummary();
+  toast('出勤を記録しました（' + time + '）');
+  sbUpsertRecord(r);
+}
+
+function clockOut(id) {
+  const r = getRec(id, todayISO());
+  if (!r || !r.shifts.length) return;
+  const lastShift = r.shifts[r.shifts.length - 1];
+  if (!lastShift || lastShift.out) return;
+  const time = nowHM();
+  lastShift.out = time;
+  save(); renderToday(); renderSummary();
+  toast('退勤を記録しました（' + time + '）');
+  sbUpsertRecord(r);
+}
+
+// 前日以前の退勤未打刻を今の時刻で記録
+function clockOutPrev(id) {
+  const r = getPrevUnfinished(id);
+  if (!r) return;
+  const lastShift = r.shifts[r.shifts.length - 1];
+  if (!lastShift || lastShift.out) return;
+  const time = nowHM();
+  lastShift.out = time;
+  save(); renderToday();
+  toast(r.date + ' の退勤を記録しました（' + time + '）');
+  sbUpsertRecord(r);
+}
+
+function toggleBreak(id, min) {
+  const r = getOrCreate(id, todayISO());
+  r.breakMin = (r.breakMin === min) ? 0 : min;
+  save(); renderToday();
+  sbUpsertRecord(r);
+}
+
+// date省略時は今日のレコード
+function saveRemarks(id, val, date) {
+  const r = getOrCreate(id, date || todayISO());
+  r.remarks = val;
+  save();
+  sbUpsertRecord(r);
+}
+
+function undoOut(id) {
+  const r = getRec(id, todayISO());
+  if (!r || !r.shifts.length) return;
+  const lastShift = r.shifts[r.shifts.length - 1];
+  if (!lastShift || !lastShift.out) return;
+  lastShift.out = null;
+  save(); renderToday(); renderSummary();
+  toast('退勤を取り消しました');
+  sbUpsertRecord(r);
+}
+
+function undoIn(id) {
+  const today = todayISO();
+  const r = getRec(id, today);
+  if (!r || !r.shifts.length) return;
+  const lastShift = r.shifts[r.shifts.length - 1];
+  if (lastShift && lastShift.out) return;
+  r.shifts.pop();
+  if (!r.shifts.length) {
+    records = records.filter(rec => rec !== r);
+    save();
+    sbDeleteRecord(id, today);
+  } else {
+    save();
+    sbUpsertRecord(r);
+  }
+  renderToday(); renderSummary();
+  toast('出勤を取り消しました');
+}
+
+// ─────────────── Records ───────────────
+function getRec(empId, date) {
+  return records.find(r => r.employeeId === empId && r.date === date);
+}
+function getOrCreate(empId, date) {
+  let r = getRec(empId, date);
+  if (!r) {
+    const emp = employees.find(e => e.id === empId);
+    r = {
+      id: `${empId}_${date}`,
+      employeeId: empId,
+      employeeName: emp ? emp.name : '',
+      date, shifts: [], breakMin: 0, remarks: ''
+    };
+    records.push(r);
+  }
+  // 旧フォーマット (clockIn/clockOut) をマイグレーション
+  if (!r.shifts) {
+    r.shifts = r.clockIn ? [{ in: r.clockIn, out: r.clockOut || null }] : [];
+    delete r.clockIn; delete r.clockOut;
+  }
+  return r;
+}
+
+// ─────────────── Render Today ───────────────
+function renderToday() {
+  const grid  = document.getElementById('empGrid');
+  const empty = document.getElementById('empEmpty');
+  if (!employees.length) {
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  const today  = todayISO();
+  const BREAKS = [15, 30, 45, 60, 75, 90];
+
+  grid.innerHTML = employees.map(emp => {
+    const r      = getRec(emp.id, today);
+    const prevR  = getPrevUnfinished(emp.id);
+    const shifts = r ? (r.shifts || []) : [];
+    const st     = getStatus(r);
+    const working = st === 'working';
+    const done    = st === 'done';
+    const absent  = st === 'absent';
+    const brk    = r?.breakMin || 0;
+    const rem    = r?.remarks  || '';
+    const det    = shifts.length ? calcDetail(shifts, brk, settings.scheduledMin) : null;
+    const isEst  = working;
+    const ch     = esc(emp.name.charAt(0) || '?');
+
+    const chipClass = (val, color) =>
+      `stat-chip-val ${val > 0 ? color : 'c-zero'}${isEst ? ' c-est' : ''}`;
+
+    // ── シフト表示部 ──
+    let shiftsHtml = '';
+    if (shifts.length === 0) {
+      shiftsHtml = `
+        <div class="time-row">
+          <div class="time-box"><div class="time-lbl">出勤</div><div class="time-val empty">--:--</div></div>
+          <div class="time-box"><div class="time-lbl">退勤</div><div class="time-val empty">--:--</div></div>
+        </div>`;
+    } else if (shifts.length === 1) {
+      const s = shifts[0];
+      const outStr = s.out ? dispOut(s.in, s.out) : '--:--';
+      const isCross = s.out && s.out < s.in;
+      shiftsHtml = `
+        <div class="time-row">
+          <div class="time-box"><div class="time-lbl">出勤</div><div class="time-val">${s.in}</div></div>
+          <div class="time-box">
+            <div class="time-lbl">退勤</div>
+            <div class="time-val${!s.out ? ' empty' : ''}">${s.out ? s.out : '--:--'}</div>
+            ${isCross ? '<span class="time-next">翌日</span>' : ''}
+          </div>
+        </div>`;
+    } else {
+      shiftsHtml = `<div class="shifts-list">` +
+        shifts.map((s, i) => {
+          const outStr  = s.out || '--:--';
+          const isCross = s.out && s.out < s.in;
+          return `<div class="shift-row">
+            <span class="shift-lbl">シフト${i+1}</span>
+            <span class="shift-time">${s.in}</span>
+            <span class="shift-arr">→</span>
+            <span class="shift-time${!s.out ? ' empty' : ''}">${outStr}</span>
+            ${isCross ? '<span class="shift-next">翌日</span>' : ''}
+          </div>`;
+        }).join('') +
+        `</div>`;
+    }
+
+    // ── 前日未退勤セクション ──
+    let prevHtml = '';
+    if (prevR) {
+      const ps = prevR.shifts[prevR.shifts.length - 1];
+      prevHtml = `
+        <div class="prev-section">
+          <div class="prev-header">⚠ ${prevR.date} 退勤未記録（出勤: ${ps.in}〜）</div>
+          <button class="btn-prev-out" onclick="clockOutPrev(${emp.id})">今の時刻で退勤を記録する</button>
+          <textarea class="remarks" rows="2" placeholder="備考（実際の退勤時刻など）..."
+                    onchange="saveRemarks(${emp.id}, this.value, '${prevR.date}')">${esc(prevR.remarks || '')}</textarea>
+        </div>
+        <div class="card-divider"></div>`;
+    }
+
+    // ── バッジ ──
+    let badgeClass = STATUS_BADGE[st];
+    let badgeLabel = STATUS_LABEL[st];
+    if (absent && prevR) { badgeClass = 'badge-prev'; badgeLabel = '退勤未記録あり'; }
+
+    // ── 実働表示 ──
+    const workDurHtml = det
+      ? `<div class="work-dur">実働 ${fmtWork(det.workMin)}${isEst ? '（見込み）' : ''}</div>`
+      : '';
+
+    return `
+<div class="card">
+  <div class="card-head">
+    <div class="avatar">${ch}</div>
+    <div class="emp-meta">
+      <div class="emp-name">${esc(emp.name)}</div>
+      <span class="badge ${badgeClass}">${badgeLabel}</span>
+      ${det ? workDurHtml : ''}
+    </div>
+  </div>
+  <div class="card-body">
+    ${prevHtml}
+    ${shiftsHtml}
+    ${det ? `
+    <div class="extra-stats">
+      <div class="stat-chip">
+        <div class="stat-chip-lbl">残業時間</div>
+        <div class="${chipClass(det.otMin,'c-ot')}">${fmtChip(det.otMin)}</div>
+      </div>
+      <div class="stat-chip">
+        <div class="stat-chip-lbl">深夜労働</div>
+        <div class="${chipClass(det.dnMin,'c-dn')}">${fmtChip(det.dnMin)}</div>
+      </div>
+      <div class="stat-chip">
+        <div class="stat-chip-lbl">深夜残業</div>
+        <div class="${chipClass(det.dnOtMin,'c-dnot')}">${fmtChip(det.dnOtMin)}</div>
+      </div>
+    </div>` : ''}
+    <div class="sec-lbl">休憩時間</div>
+    <div class="break-row">
+      ${BREAKS.map(m => `
+        <button class="brk-btn${brk===m?' on':''}"
+                onclick="toggleBreak(${emp.id},${m})"
+                ${absent && !shifts.length ? 'disabled' : ''}>${m}分</button>
+      `).join('')}
+    </div>
+    <textarea class="remarks" rows="2" placeholder="備考を入力..."
+              onchange="saveRemarks(${emp.id},this.value)">${esc(rem)}</textarea>
+    <div class="act-row">
+      <button class="btn btn-in"  onclick="clockIn(${emp.id})"  ${working ? 'disabled' : ''}>出勤</button>
+      <button class="btn btn-out" onclick="clockOut(${emp.id})" ${!working ? 'disabled' : ''}>退勤</button>
+      <button class="btn btn-undo" onclick="${done ? 'undoOut' : 'undoIn'}(${emp.id})"
+              title="${done ? '退勤を取り消し' : '出勤を取り消し'}" ${absent ? 'disabled' : ''}>↩</button>
+    </div>
+  </div>
+</div>`;
+  }).join('');
+}
+
+// ─────────────── Summary ───────────────
+function renderSummary() {
+  const today = todayISO();
+  let absent=0, working=0, done=0;
+  employees.forEach(e => {
+    const s = getStatus(getRec(e.id, today));
+    if      (s==='absent')  absent++;
+    else if (s==='working') working++;
+    else                    done++;
+  });
+  document.getElementById('summaryBar').innerHTML = `
+    <div class="sum-item"><div class="sum-dot dot-working"></div>
+      <span class="sum-label">出勤中</span><span class="sum-count">${working}人</span></div>
+    <div class="sum-item"><div class="sum-dot dot-absent"></div>
+      <span class="sum-label">未出勤</span><span class="sum-count">${absent}人</span></div>
+    <div class="sum-item"><div class="sum-dot dot-done"></div>
+      <span class="sum-label">退勤済み</span><span class="sum-count">${done}人</span></div>
+    <div class="sum-item" style="margin-left:auto;color:var(--g500);font-size:12px;">
+      合計 ${employees.length}人</div>`;
+}
+
+// ─────────────── History ───────────────
+function renderHistory() {
+  const monthVal = document.getElementById('fMonth').value;
+  const empVal   = document.getElementById('fEmp').value;
+  let rows = [...records];
+  if (monthVal) rows = rows.filter(r => r.date.startsWith(monthVal));
+  if (empVal)   rows = rows.filter(r => String(r.employeeId) === empVal);
+  rows.sort((a,b) => a.date !== b.date
+    ? b.date.localeCompare(a.date)
+    : a.employeeName.localeCompare(b.employeeName,'ja'));
+
+  const tbody = document.getElementById('histTbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="11" class="no-data">データがありません</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const shifts     = r.shifts || [];
+    const firstShift = shifts[0] || {};
+    const lastShift  = shifts[shifts.length - 1] || {};
+    const det = shifts.length ? calcDetail(shifts, r.breakMin, settings.scheduledMin) : null;
+    const lastOut = lastShift.out
+      ? (lastShift.out < (firstShift.in || '') ? '翌' + lastShift.out : lastShift.out)
+      : (shifts.length ? '退勤中' : '-');
+    return `<tr>
+      <td>${r.date}</td>
+      <td>${esc(r.employeeName)}</td>
+      <td>${firstShift.in || '-'}</td>
+      <td>${lastOut}</td>
+      <td style="text-align:center">${shifts.length > 1 ? shifts.length + '回' : '-'}</td>
+      <td>${r.breakMin ? r.breakMin+'分' : '-'}</td>
+      <td>${det ? fmtWork(det.workMin) : '-'}</td>
+      <td class="${det && det.otMin   > 0 ? 'td-ot'   : ''}">${det ? fmtWork(det.otMin)   : '-'}</td>
+      <td class="${det && det.dnMin   > 0 ? 'td-dn'   : ''}">${det ? fmtWork(det.dnMin)   : '-'}</td>
+      <td class="${det && det.dnOtMin > 0 ? 'td-dnot' : ''}">${det ? fmtWork(det.dnOtMin) : '-'}</td>
+      <td style="max-width:160px;white-space:pre-wrap;word-break:break-all">${esc(r.remarks||'')}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─────────────── Employee list ───────────────
+function renderEmpList() {
+  const list  = document.getElementById('empList');
+  const empty = document.getElementById('empListEmpty');
+  if (!employees.length) {
+    list.innerHTML = '';
+    list.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  list.style.display  = 'block';
+  list.innerHTML = employees.map(e => `
+    <div class="emp-row">
+      <div class="avatar" style="width:38px;height:38px;font-size:15px;">${esc(e.name.charAt(0)||'?')}</div>
+      <div class="emp-row-name">${esc(e.name)}</div>
+      <button class="btn-del" onclick="showDelModal(${e.id})">削除</button>
+    </div>
+  `).join('');
+}
+
+function renderAll() {
+  renderEmpList(); renderToday(); renderSummary(); syncEmpFilter();
+}
+
+function syncEmpFilter() {
+  const sel = document.getElementById('fEmp');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">全員</option>' +
+    employees.map(e =>
+      `<option value="${e.id}"${String(e.id)===cur?' selected':''}>${esc(e.name)}</option>`
+    ).join('');
+}
+
+function applySettingsUI() {
+  const h = Math.floor(settings.scheduledMin / 60);
+  const m = settings.scheduledMin % 60;
+  document.getElementById('setH').value = h;
+  document.getElementById('setM').value = m;
+}
+
+// ─────────────── Settings ───────────────
+function saveScheduledTime() {
+  const h = parseInt(document.getElementById('setH').value) || 0;
+  const m = parseInt(document.getElementById('setM').value) || 0;
+  const total = h*60 + m;
+  if (total < 60 || total > 1200) { toast('所定労働時間は1時間〜20時間で入力してください'); return; }
+  settings.scheduledMin = total;
+  saveSettings();
+  toast('所定労働時間を ' + h + '時間' + (m ? m+'分' : '') + ' に保存しました');
+  sbUpsertSettings();
+}
+
+// ─────────────── Add / Delete employee ───────────────
+function addEmployee() {
+  const inp  = document.getElementById('newName');
+  const name = inp.value.trim();
+  if (!name)                                { toast('名前を入力してください'); return; }
+  if (employees.some(e => e.name === name)) { toast('同じ名前が既に存在します'); return; }
+  const emp = { id: Date.now(), name };
+  employees.push(emp);
+  save(); inp.value = '';
+  renderEmpList(); renderToday(); renderSummary(); syncEmpFilter();
+  toast(name + ' を追加しました');
+  sbUpsertEmployee(emp);
+}
+
+function showDelModal(id) {
+  const e = employees.find(e => e.id === id);
+  if (!e) return;
+  delTarget = id;
+  document.getElementById('delMsg').textContent =
+    `「${e.name}」を削除しますか？この従業員の勤怠データも全て削除されます。`;
+  document.getElementById('delOverlay').style.display = 'flex';
+}
+function closeDelModal() {
+  document.getElementById('delOverlay').style.display = 'none';
+  delTarget = null;
+}
+function confirmDelete() {
+  if (!delTarget) return;
+  const e = employees.find(e => e.id === delTarget);
+  employees = employees.filter(e => e.id !== delTarget);
+  records   = records.filter(r => r.employeeId !== delTarget);
+  save();
+  renderEmpList(); renderToday(); renderSummary(); renderHistory(); syncEmpFilter();
+  closeDelModal();
+  if (e) toast(e.name + ' を削除しました');
+  sbDeleteEmployee(delTarget);
+}
+
+// ─────────────── CSV Export ───────────────
+function exportCSV() {
+  const monthVal = document.getElementById('fMonth').value;
+  const empVal   = document.getElementById('fEmp').value;
+  let rows = [...records];
+  if (monthVal) rows = rows.filter(r => r.date.startsWith(monthVal));
+  if (empVal)   rows = rows.filter(r => String(r.employeeId) === empVal);
+  if (!rows.length) { toast('出力するデータがありません'); return; }
+
+  rows.sort((a,b) => a.date !== b.date
+    ? a.date.localeCompare(b.date)
+    : a.employeeName.localeCompare(b.employeeName,'ja'));
+
+  const schH = Math.floor(settings.scheduledMin/60);
+  const schM = settings.scheduledMin%60;
+  const schLabel = schH + '時間' + (schM ? schM+'分' : '');
+  const HEADS = [
+    '日付','従業員名','出勤時刻','退勤時刻','シフト数','休憩時間(分)',
+    `所定労働時間(分)[${schLabel}]`,
+    '実働時間(分)','実働時間','残業時間(分)','残業時間',
+    '深夜労働時間(分)','深夜労働時間','深夜残業時間(分)','深夜残業時間','備考'
+  ];
+  const csvRows = rows.map(r => {
+    const shifts     = r.shifts || [];
+    const firstShift = shifts[0] || {};
+    const lastShift  = shifts[shifts.length - 1] || {};
+    const det = shifts.length ? calcDetail(shifts, r.breakMin, settings.scheduledMin) : null;
+    return [
+      r.date, r.employeeName,
+      firstShift.in || '', lastShift.out || '',
+      shifts.length,
+      r.breakMin || 0,
+      settings.scheduledMin,
+      det?det.workMin:'', det?fmtWork(det.workMin):'',
+      det?det.otMin:'',   det?fmtWork(det.otMin):'',
+      det?det.dnMin:'',   det?fmtWork(det.dnMin):'',
+      det?det.dnOtMin:'', det?fmtWork(det.dnOtMin):'',
+      r.remarks||''
+    ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
+  });
+
+  const csv  = '﻿' + [HEADS.join(','), ...csvRows].join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const fname = `勤怠管理_${monthVal || todayISO().slice(0,7)}.csv`;
+  const a = Object.assign(document.createElement('a'), { href:url, download:fname });
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  toast('CSVをダウンロードしました');
+}
+
+// ─────────────── Tab switch ───────────────
+function switchTab(tab) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('on'));
+  document.getElementById('tab-' + tab).classList.add('on');
+  document.querySelector(`.nav-btn[data-tab="${tab}"]`).classList.add('on');
+  if (tab === 'history')   renderHistory();
+  if (tab === 'employees') { renderEmpList(); applySettingsUI(); }
+}
+
+// ─────────────── Toast ───────────────
+let toastTimer;
+function toast(msg) {
+  clearTimeout(toastTimer);
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+// ─────────────── Helpers ───────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─────────────── Clock ───────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('hdrDate').textContent =
+    now.toLocaleDateString('ja-JP',{ year:'numeric', month:'long', day:'numeric', weekday:'short' });
+  document.getElementById('hdrTime').textContent =
+    now.toLocaleTimeString('ja-JP',{ hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+
+// ─────────────── Init ───────────────
+(async function init() {
+  // 旧フォーマット (clockIn/clockOut) → shifts[] へマイグレーション
+  let migrated = false;
+  records = records.map(r => {
+    if (!r.shifts) {
+      migrated = true;
+      return {
+        id: r.id,
+        employeeId: r.employeeId,
+        employeeName: r.employeeName,
+        date: r.date,
+        shifts: r.clockIn ? [{ in: r.clockIn, out: r.clockOut || null }] : [],
+        breakMin: r.breakMin || 0,
+        remarks: r.remarks || ''
+      };
+    }
+    return r;
+  });
+  if (migrated) localStorage.setItem(SK_REC, JSON.stringify(records));
+
+  document.getElementById('fMonth').value = todayISO().slice(0,7);
+  applySettingsUI();
+  syncEmpFilter();
+  renderSummary();
+  renderToday();
+  updateClock();
+  setInterval(updateClock,  1000);
+  setInterval(renderToday, 60000);
+
+  const cfg = JSON.parse(localStorage.getItem(SK_SB) || 'null');
+  if (cfg && cfg.url && cfg.key && initSupabase(cfg.url, cfg.key)) {
+    try {
+      await loadFromSupabase();
+      setupRealtime();
+      updateSbUI(true, cfg.url, cfg.key);
+    } catch (e) {
+      sb = null;
+    }
+  }
+})();
+</script>
+</body>
+</html>
