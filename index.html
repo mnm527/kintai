@@ -1567,14 +1567,15 @@ function closeDelModal() {
 }
 function confirmDelete() {
   if (!delTarget) return;
-  const e = employees.find(e => e.id === delTarget);
-  employees = employees.filter(e => e.id !== delTarget);
-  records   = records.filter(r => r.employeeId !== delTarget);
+  const id = delTarget;
+  const e = employees.find(e => e.id === id);
+  employees = employees.filter(e => e.id !== id);
+  records   = records.filter(r => r.employeeId !== id);
   save();
   renderEmpList(); renderToday(); renderSummary(); renderHistory(); syncEmpFilter();
   closeDelModal();
   if (e) toast(e.name + ' を削除しました');
-  sbDeleteEmployee(delTarget);
+  sbDeleteEmployee(id);
 }
 
 // ─────────────── CSV Export ───────────────
