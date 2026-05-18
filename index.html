@@ -987,7 +987,15 @@ function setupRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, handleEmpChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'records' },   handleRecChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' },  handleSetChange)
-    .subscribe();
+    .subscribe(status => {
+      const el = document.getElementById('sbStatus');
+      if (status === 'SUBSCRIBED') {
+        if (el) { el.textContent = '● 接続済み（同期中）'; el.className = 'sb-status connected'; }
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        if (el) { el.textContent = '● 接続済み（同期エラー）'; el.className = 'sb-status'; el.style.color='var(--amber)'; }
+        toast('リアルタイム同期に失敗しました。Supabase Replicationが有効か確認してください');
+      }
+    });
 }
 
 function handleEmpChange(payload) {
