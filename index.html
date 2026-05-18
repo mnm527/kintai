@@ -905,7 +905,6 @@ function toDbRec(r) {
     clock_in:      first.in  || null,
     clock_out:     last.out  || null,
     break_min:     r.breakMin || 0,
-    shifts:        JSON.stringify(r.shifts || []),
     remarks:       r.remarks  || ''
   };
 }
