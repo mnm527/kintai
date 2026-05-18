@@ -987,7 +987,15 @@ function setupRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, handleEmpChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'records' },   handleRecChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' },  handleSetChange)
-    .subscribe();
+    .subscribe(status => {
+      const el = document.getElementById('sbStatus');
+      if (status === 'SUBSCRIBED') {
+        if (el) { el.textContent = '● 接続済み（同期中）'; el.className = 'sb-status connected'; }
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        if (el) { el.textContent = '● 接続済み（同期エラー）'; el.className = 'sb-status'; el.style.color='var(--amber)'; }
+        toast('リアルタイム同期に失敗しました。Supabase Replicationが有効か確認してください');
+      }
+    });
 }
 
 function handleEmpChange(payload) {
@@ -1559,14 +1567,15 @@ function closeDelModal() {
 }
 function confirmDelete() {
   if (!delTarget) return;
-  const e = employees.find(e => e.id === delTarget);
-  employees = employees.filter(e => e.id !== delTarget);
-  records   = records.filter(r => r.employeeId !== delTarget);
+  const id = delTarget;
+  const e = employees.find(e => e.id === id);
+  employees = employees.filter(e => e.id !== id);
+  records   = records.filter(r => r.employeeId !== id);
   save();
   renderEmpList(); renderToday(); renderSummary(); renderHistory(); syncEmpFilter();
   closeDelModal();
   if (e) toast(e.name + ' を削除しました');
-  sbDeleteEmployee(delTarget);
+  sbDeleteEmployee(id);
 }
 
 // ─────────────── CSV Export ───────────────
