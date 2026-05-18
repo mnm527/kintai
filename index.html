@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -148,9 +147,74 @@
     .badge-absent  { background: var(--g100); color: var(--g600); }
     .badge-working { background: #dcfce7; color: #15803d; }
     .badge-done    { background: #dbeafe; color: #1e40af; }
+    .badge-prev    { background: #fef3c7; color: #92400e; }
     .work-dur { font-size: 11px; color: var(--g500); margin-top: 3px; }
 
     .card-body { padding: 13px 15px; }
+
+    /* 前日未退勤アラート */
+    .prev-section {
+      background: #fffbeb;
+      border: 1.5px solid #fbbf24;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+    }
+    .prev-header {
+      font-size: 12px;
+      font-weight: 700;
+      color: #92400e;
+      margin-bottom: 8px;
+    }
+    .btn-prev-out {
+      display: block;
+      width: 100%;
+      padding: 8px 14px;
+      background: var(--amber);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    .btn-prev-out:active { filter: brightness(.9); }
+
+    .card-divider {
+      height: 1px;
+      background: var(--g200);
+      margin: 12px -15px;
+    }
+
+    /* 複数シフト表示 */
+    .shifts-list { margin-bottom: 10px; }
+    .shift-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+      border-bottom: 1px solid var(--g100);
+      font-size: 14px;
+    }
+    .shift-row:last-child { border-bottom: none; }
+    .shift-lbl {
+      font-size: 11px;
+      color: var(--g500);
+      width: 44px;
+      flex-shrink: 0;
+    }
+    .shift-time {
+      font-size: 18px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: var(--g800);
+    }
+    .shift-time.empty { color: var(--g300); }
+    .shift-arr { color: var(--g400); font-size: 13px; }
+    .shift-next { font-size: 11px; color: var(--amber); font-weight: 600; }
 
     .time-row { display: flex; gap: 10px; margin-bottom: 10px; }
     .time-box {
@@ -168,6 +232,7 @@
       color: var(--g800);
     }
     .time-val.empty { color: var(--g300); }
+    .time-next { font-size: 11px; color: var(--amber); font-weight: 600; display: block; margin-top: 2px; }
 
     .extra-stats {
       display: grid;
@@ -606,6 +671,7 @@
             <th>従業員名</th>
             <th>出勤</th>
             <th>退勤</th>
+            <th>シフト数</th>
             <th>休憩</th>
             <th>実働時間</th>
             <th class="h-ot">残業時間</th>
@@ -625,7 +691,6 @@
   <!-- ===== EMPLOYEES ===== -->
   <div id="tab-employees" class="panel">
 
-    <!-- Supabase 接続設定 -->
     <div class="settings-card">
       <h3>☁ Supabase 複数端末同期</h3>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
@@ -660,6 +725,7 @@ create table if not exists records (
   clock_in text,
   clock_out text,
   break_min integer default 0,
+  shifts text default '[]',
   remarks text default '',
   unique (employee_id, date)
 );
@@ -678,13 +744,14 @@ create policy "public_access" on records for all using (true) with check (true);
 create policy "public_access" on settings for all using (true) with check (true);</pre>
             <button onclick="copySql()" style="position:absolute;top:8px;right:8px;padding:4px 10px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit">コピー</button>
           </div>
+          <p style="margin-top:6px">※既存テーブルに shifts カラムを追加する場合：<br>
+          <code style="background:var(--g100);padding:2px 6px;border-radius:4px;font-size:11px">alter table records add column if not exists shifts text default '[]';</code></p>
           <p style="margin-top:6px">3. <strong>Settings → API</strong> から Project URL と anon public キーをコピーして上に入力</p>
           <p>4. 「接続する」→ 既存データがある場合は「ローカルデータをアップロード」で同期</p>
         </div>
       </details>
     </div>
 
-    <!-- 所定労働時間設定 -->
     <div class="settings-card">
       <h3>⚙ 設定</h3>
       <div class="settings-row">
@@ -807,26 +874,38 @@ function mapEmp(e) {
   return { id: e.id, name: e.name };
 }
 function mapRec(r) {
+  let shifts;
+  try {
+    if (r.shifts) {
+      shifts = typeof r.shifts === 'string' ? JSON.parse(r.shifts) : r.shifts;
+    } else {
+      shifts = r.clock_in ? [{ in: r.clock_in, out: r.clock_out || null }] : [];
+    }
+  } catch(e) {
+    shifts = r.clock_in ? [{ in: r.clock_in, out: r.clock_out || null }] : [];
+  }
   return {
     id:           r.id,
     employeeId:   r.employee_id,
     employeeName: r.employee_name,
     date:         r.date,
-    clockIn:      r.clock_in  || null,
-    clockOut:     r.clock_out || null,
+    shifts:       shifts,
     breakMin:     r.break_min || 0,
     remarks:      r.remarks   || ''
   };
 }
 function toDbRec(r) {
+  const first = r.shifts && r.shifts[0] ? r.shifts[0] : {};
+  const last  = r.shifts && r.shifts.length ? r.shifts[r.shifts.length - 1] : {};
   return {
     id:            String(r.id),
     employee_id:   r.employeeId,
     employee_name: r.employeeName,
     date:          r.date,
-    clock_in:      r.clockIn  || null,
-    clock_out:     r.clockOut || null,
+    clock_in:      first.in  || null,
+    clock_out:     last.out  || null,
     break_min:     r.breakMin || 0,
+    shifts:        JSON.stringify(r.shifts || []),
     remarks:       r.remarks  || ''
   };
 }
@@ -963,6 +1042,15 @@ function nowHM() {
 }
 function pad(n) { return String(n).padStart(2,'0'); }
 
+// 退勤時刻が日付を跨いでいる場合「翌HH:MM」表示
+function dispOut(inTime, outTime) {
+  if (!outTime) return '--:--';
+  const [ih, im] = inTime.split(':').map(Number);
+  const [oh, om] = outTime.split(':').map(Number);
+  if (oh * 60 + om < ih * 60 + im) return '翌' + outTime;
+  return outTime;
+}
+
 // ─────────────── Time calculation ───────────────
 function overlapWith(s1, e1, s2, e2) {
   return Math.max(0, Math.min(e1, e2) - Math.max(s1, s2));
@@ -978,29 +1066,73 @@ function overlapWithDeepNight(start, end) {
   }
   return total;
 }
-function calcDetail(clockIn, clockOut, breakMin, scheduledMin) {
-  if (!clockIn || !clockOut) return null;
+
+// shifts: [{in: "HH:MM", out: "HH:MM"|null}, ...]
+function calcDetail(shifts, breakMin, scheduledMin) {
+  if (!shifts || !shifts.length || !shifts[0].in) return null;
+
   const brk = breakMin    || 0;
   const sch = scheduledMin || 480;
-  const [ih,im] = clockIn.split(':').map(Number);
-  const [oh,om] = clockOut.split(':').map(Number);
-  let inM  = ih*60 + im;
-  let outM = oh*60 + om;
-  if (outM <= inM) outM += 1440;
-  const span    = outM - inM;
-  const workMin = Math.max(0, span - brk);
-  const otMin   = Math.max(0, workMin - sch);
-  const rawDN   = overlapWithDeepNight(inM, outM);
-  const rawReg  = span - rawDN;
-  const brkDN   = Math.max(0, brk - Math.min(brk, rawReg));
-  const dnMin   = Math.max(0, rawDN - brkDN);
-  let dnOtMin   = 0;
-  if (otMin > 0) {
-    const otStart = inM + brk + sch;
-    dnOtMin = overlapWithDeepNight(otStart, outM);
+  let hasEstimate = false;
+  const pairs = [];
+  let prevOutM = -Infinity;
+
+  for (const s of shifts) {
+    if (!s.in) continue;
+    const [ih, im] = s.in.split(':').map(Number);
+    let inM = ih * 60 + im;
+    // 前シフト終了より前なら翌日扱い
+    if (inM <= prevOutM) inM += 1440;
+
+    let outM;
+    if (s.out) {
+      const [oh, om] = s.out.split(':').map(Number);
+      outM = oh * 60 + om;
+      if (outM <= inM) outM += 1440; // 日跨ぎ
+    } else {
+      const d = new Date();
+      outM = d.getHours() * 60 + d.getMinutes();
+      if (outM <= inM) outM += 1440;
+      hasEstimate = true;
+    }
+
+    pairs.push([inM, outM]);
+    prevOutM = outM;
   }
-  return { workMin, otMin, dnMin, dnOtMin };
+
+  if (!pairs.length) return null;
+
+  let totalSpan = 0;
+  let totalDN   = 0;
+  for (const [inM, outM] of pairs) {
+    totalSpan += outM - inM;
+    totalDN   += overlapWithDeepNight(inM, outM);
+  }
+
+  const workMin = Math.max(0, totalSpan - brk);
+  const otMin   = Math.max(0, workMin - sch);
+  const rawReg  = totalSpan - totalDN;
+  const brkDN   = Math.max(0, brk - Math.min(brk, rawReg));
+  const dnMin   = Math.max(0, totalDN - brkDN);
+
+  // 深夜残業: 残業開始以降の深夜重複を合算
+  let dnOtMin = 0;
+  if (otMin > 0) {
+    const otStartAtSpan = sch + brk;
+    let spanAccum = 0;
+    for (const [inM, outM] of pairs) {
+      const shiftSpan = outM - inM;
+      if (spanAccum + shiftSpan > otStartAtSpan) {
+        const otStartInShift = inM + Math.max(0, otStartAtSpan - spanAccum);
+        dnOtMin += overlapWithDeepNight(otStartInShift, outM);
+      }
+      spanAccum += shiftSpan;
+    }
+  }
+
+  return { workMin, otMin, dnMin, dnOtMin, isEstimate: hasEstimate };
 }
+
 function fmtWork(min) {
   if (min === null || min === undefined || min === '') return '-';
   const h = Math.floor(min/60), m = min%60;
@@ -1015,60 +1147,110 @@ function fmtChip(min) {
 }
 
 // ─────────────── Status ───────────────
+// r: 今日のレコード（またはnull）
 function getStatus(r) {
-  if (!r || !r.clockIn) return 'absent';
-  if (!r.clockOut)       return 'working';
-  return 'done';
+  if (!r || !r.shifts || !r.shifts.length) return 'absent';
+  const last = r.shifts[r.shifts.length - 1];
+  return last.out ? 'done' : 'working';
 }
 const STATUS_LABEL = { absent:'未出勤', working:'出勤中', done:'退勤済み' };
 const STATUS_BADGE = { absent:'badge-absent', working:'badge-working', done:'badge-done' };
 
+// 前日以前の退勤未打刻レコードを取得
+function getPrevUnfinished(empId) {
+  const today = todayISO();
+  const matches = records.filter(r =>
+    r.employeeId === empId &&
+    r.date < today &&
+    r.shifts && r.shifts.length > 0 &&
+    !r.shifts[r.shifts.length - 1].out
+  );
+  if (!matches.length) return null;
+  return matches.sort((a, b) => b.date.localeCompare(a.date))[0];
+}
+
 // ─────────────── Actions ───────────────
 function clockIn(id) {
   const r = getOrCreate(id, todayISO());
-  if (r.clockIn) return;
-  r.clockIn = nowHM();
+  const lastShift = r.shifts.length ? r.shifts[r.shifts.length - 1] : null;
+  if (lastShift && !lastShift.out) {
+    toast('まず退勤してください'); return;
+  }
+  const time = nowHM();
+  r.shifts.push({ in: time, out: null });
   save(); renderToday(); renderSummary();
-  toast('出勤を記録しました（' + r.clockIn + '）');
+  toast('出勤を記録しました（' + time + '）');
   sbUpsertRecord(r);
 }
+
 function clockOut(id) {
-  const r = getOrCreate(id, todayISO());
-  if (!r.clockIn || r.clockOut) return;
-  r.clockOut = nowHM();
+  const r = getRec(id, todayISO());
+  if (!r || !r.shifts.length) return;
+  const lastShift = r.shifts[r.shifts.length - 1];
+  if (!lastShift || lastShift.out) return;
+  const time = nowHM();
+  lastShift.out = time;
   save(); renderToday(); renderSummary();
-  toast('退勤を記録しました（' + r.clockOut + '）');
+  toast('退勤を記録しました（' + time + '）');
   sbUpsertRecord(r);
 }
+
+// 前日以前の退勤未打刻を今の時刻で記録
+function clockOutPrev(id) {
+  const r = getPrevUnfinished(id);
+  if (!r) return;
+  const lastShift = r.shifts[r.shifts.length - 1];
+  if (!lastShift || lastShift.out) return;
+  const time = nowHM();
+  lastShift.out = time;
+  save(); renderToday();
+  toast(r.date + ' の退勤を記録しました（' + time + '）');
+  sbUpsertRecord(r);
+}
+
 function toggleBreak(id, min) {
   const r = getOrCreate(id, todayISO());
   r.breakMin = (r.breakMin === min) ? 0 : min;
   save(); renderToday();
   sbUpsertRecord(r);
 }
-function saveRemarks(id, val) {
-  const r = getOrCreate(id, todayISO());
+
+// date省略時は今日のレコード
+function saveRemarks(id, val, date) {
+  const r = getOrCreate(id, date || todayISO());
   r.remarks = val;
   save();
   sbUpsertRecord(r);
 }
+
 function undoOut(id) {
   const r = getRec(id, todayISO());
-  if (!r || !r.clockOut) return;
-  r.clockOut = null;
+  if (!r || !r.shifts.length) return;
+  const lastShift = r.shifts[r.shifts.length - 1];
+  if (!lastShift || !lastShift.out) return;
+  lastShift.out = null;
   save(); renderToday(); renderSummary();
   toast('退勤を取り消しました');
   sbUpsertRecord(r);
 }
+
 function undoIn(id) {
-  const r = getRec(id, todayISO());
-  if (!r || !r.clockIn) return;
   const today = todayISO();
-  const empId = r.employeeId;
-  r.clockIn = null; r.clockOut = null; r.breakMin = 0;
-  save(); renderToday(); renderSummary();
+  const r = getRec(id, today);
+  if (!r || !r.shifts.length) return;
+  const lastShift = r.shifts[r.shifts.length - 1];
+  if (lastShift && lastShift.out) return;
+  r.shifts.pop();
+  if (!r.shifts.length) {
+    records = records.filter(rec => rec !== r);
+    save();
+    sbDeleteRecord(id, today);
+  } else {
+    save();
+    sbUpsertRecord(r);
+  }
+  renderToday(); renderSummary();
   toast('出勤を取り消しました');
-  sbDeleteRecord(empId, today);
 }
 
 // ─────────────── Records ───────────────
@@ -1083,9 +1265,14 @@ function getOrCreate(empId, date) {
       id: `${empId}_${date}`,
       employeeId: empId,
       employeeName: emp ? emp.name : '',
-      date, clockIn: null, clockOut: null, breakMin: 0, remarks: ''
+      date, shifts: [], breakMin: 0, remarks: ''
     };
     records.push(r);
+  }
+  // 旧フォーマット (clockIn/clockOut) をマイグレーション
+  if (!r.shifts) {
+    r.shifts = r.clockIn ? [{ in: r.clockIn, out: r.clockOut || null }] : [];
+    delete r.clockIn; delete r.clockOut;
   }
   return r;
 }
@@ -1105,20 +1292,81 @@ function renderToday() {
 
   grid.innerHTML = employees.map(emp => {
     const r      = getRec(emp.id, today);
+    const prevR  = getPrevUnfinished(emp.id);
+    const shifts = r ? (r.shifts || []) : [];
     const st     = getStatus(r);
-    const ci     = r?.clockIn  || null;
-    const co     = r?.clockOut || null;
-    const brk    = r?.breakMin || 0;
-    const rem    = r?.remarks  || '';
-    const absent  = st === 'absent';
     const working = st === 'working';
     const done    = st === 'done';
-    const coEst  = co || (ci ? nowHM() : null);
-    const det    = ci ? calcDetail(ci, coEst, brk, settings.scheduledMin) : null;
+    const absent  = st === 'absent';
+    const brk    = r?.breakMin || 0;
+    const rem    = r?.remarks  || '';
+    const det    = shifts.length ? calcDetail(shifts, brk, settings.scheduledMin) : null;
     const isEst  = working;
     const ch     = esc(emp.name.charAt(0) || '?');
+
     const chipClass = (val, color) =>
       `stat-chip-val ${val > 0 ? color : 'c-zero'}${isEst ? ' c-est' : ''}`;
+
+    // ── シフト表示部 ──
+    let shiftsHtml = '';
+    if (shifts.length === 0) {
+      shiftsHtml = `
+        <div class="time-row">
+          <div class="time-box"><div class="time-lbl">出勤</div><div class="time-val empty">--:--</div></div>
+          <div class="time-box"><div class="time-lbl">退勤</div><div class="time-val empty">--:--</div></div>
+        </div>`;
+    } else if (shifts.length === 1) {
+      const s = shifts[0];
+      const outStr = s.out ? dispOut(s.in, s.out) : '--:--';
+      const isCross = s.out && s.out < s.in;
+      shiftsHtml = `
+        <div class="time-row">
+          <div class="time-box"><div class="time-lbl">出勤</div><div class="time-val">${s.in}</div></div>
+          <div class="time-box">
+            <div class="time-lbl">退勤</div>
+            <div class="time-val${!s.out ? ' empty' : ''}">${s.out ? s.out : '--:--'}</div>
+            ${isCross ? '<span class="time-next">翌日</span>' : ''}
+          </div>
+        </div>`;
+    } else {
+      shiftsHtml = `<div class="shifts-list">` +
+        shifts.map((s, i) => {
+          const outStr  = s.out || '--:--';
+          const isCross = s.out && s.out < s.in;
+          return `<div class="shift-row">
+            <span class="shift-lbl">シフト${i+1}</span>
+            <span class="shift-time">${s.in}</span>
+            <span class="shift-arr">→</span>
+            <span class="shift-time${!s.out ? ' empty' : ''}">${outStr}</span>
+            ${isCross ? '<span class="shift-next">翌日</span>' : ''}
+          </div>`;
+        }).join('') +
+        `</div>`;
+    }
+
+    // ── 前日未退勤セクション ──
+    let prevHtml = '';
+    if (prevR) {
+      const ps = prevR.shifts[prevR.shifts.length - 1];
+      prevHtml = `
+        <div class="prev-section">
+          <div class="prev-header">⚠ ${prevR.date} 退勤未記録（出勤: ${ps.in}〜）</div>
+          <button class="btn-prev-out" onclick="clockOutPrev(${emp.id})">今の時刻で退勤を記録する</button>
+          <textarea class="remarks" rows="2" placeholder="備考（実際の退勤時刻など）..."
+                    onchange="saveRemarks(${emp.id}, this.value, '${prevR.date}')">${esc(prevR.remarks || '')}</textarea>
+        </div>
+        <div class="card-divider"></div>`;
+    }
+
+    // ── バッジ ──
+    let badgeClass = STATUS_BADGE[st];
+    let badgeLabel = STATUS_LABEL[st];
+    if (absent && prevR) { badgeClass = 'badge-prev'; badgeLabel = '退勤未記録あり'; }
+
+    // ── 実働表示 ──
+    const workDurHtml = det
+      ? `<div class="work-dur">実働 ${fmtWork(det.workMin)}${isEst ? '（見込み）' : ''}</div>`
+      : '';
 
     return `
 <div class="card">
@@ -1126,21 +1374,13 @@ function renderToday() {
     <div class="avatar">${ch}</div>
     <div class="emp-meta">
       <div class="emp-name">${esc(emp.name)}</div>
-      <span class="badge ${STATUS_BADGE[st]}">${STATUS_LABEL[st]}</span>
-      ${det ? `<div class="work-dur">実働 ${fmtWork(det.workMin)}${isEst ? '（見込み）' : ''}</div>` : ''}
+      <span class="badge ${badgeClass}">${badgeLabel}</span>
+      ${det ? workDurHtml : ''}
     </div>
   </div>
   <div class="card-body">
-    <div class="time-row">
-      <div class="time-box">
-        <div class="time-lbl">出勤</div>
-        <div class="time-val${ci ? '' : ' empty'}">${ci || '--:--'}</div>
-      </div>
-      <div class="time-box">
-        <div class="time-lbl">退勤</div>
-        <div class="time-val${co ? '' : ' empty'}">${co || '--:--'}</div>
-      </div>
-    </div>
+    ${prevHtml}
+    ${shiftsHtml}
     ${det ? `
     <div class="extra-stats">
       <div class="stat-chip">
@@ -1161,16 +1401,16 @@ function renderToday() {
       ${BREAKS.map(m => `
         <button class="brk-btn${brk===m?' on':''}"
                 onclick="toggleBreak(${emp.id},${m})"
-                ${absent?'disabled':''}>${m}分</button>
+                ${absent && !shifts.length ? 'disabled' : ''}>${m}分</button>
       `).join('')}
     </div>
     <textarea class="remarks" rows="2" placeholder="備考を入力..."
               onchange="saveRemarks(${emp.id},this.value)">${esc(rem)}</textarea>
     <div class="act-row">
-      <button class="btn btn-in"  onclick="clockIn(${emp.id})"  ${!absent ?'disabled':''}>出勤</button>
-      <button class="btn btn-out" onclick="clockOut(${emp.id})" ${!working?'disabled':''}>退勤</button>
-      <button class="btn btn-undo" onclick="${done?'undoOut':'undoIn'}(${emp.id})"
-              title="直前の操作を取り消し" ${absent?'disabled':''}>↩</button>
+      <button class="btn btn-in"  onclick="clockIn(${emp.id})"  ${working ? 'disabled' : ''}>出勤</button>
+      <button class="btn btn-out" onclick="clockOut(${emp.id})" ${!working ? 'disabled' : ''}>退勤</button>
+      <button class="btn btn-undo" onclick="${done ? 'undoOut' : 'undoIn'}(${emp.id})"
+              title="${done ? '退勤を取り消し' : '出勤を取り消し'}" ${absent ? 'disabled' : ''}>↩</button>
     </div>
   </div>
 </div>`;
@@ -1211,16 +1451,23 @@ function renderHistory() {
 
   const tbody = document.getElementById('histTbody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="10" class="no-data">データがありません</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="no-data">データがありません</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(r => {
-    const det = calcDetail(r.clockIn, r.clockOut, r.breakMin, settings.scheduledMin);
+    const shifts     = r.shifts || [];
+    const firstShift = shifts[0] || {};
+    const lastShift  = shifts[shifts.length - 1] || {};
+    const det = shifts.length ? calcDetail(shifts, r.breakMin, settings.scheduledMin) : null;
+    const lastOut = lastShift.out
+      ? (lastShift.out < (firstShift.in || '') ? '翌' + lastShift.out : lastShift.out)
+      : (shifts.length ? '退勤中' : '-');
     return `<tr>
       <td>${r.date}</td>
       <td>${esc(r.employeeName)}</td>
-      <td>${r.clockIn  || '-'}</td>
-      <td>${r.clockOut || '-'}</td>
+      <td>${firstShift.in || '-'}</td>
+      <td>${lastOut}</td>
+      <td style="text-align:center">${shifts.length > 1 ? shifts.length + '回' : '-'}</td>
       <td>${r.breakMin ? r.breakMin+'分' : '-'}</td>
       <td>${det ? fmtWork(det.workMin) : '-'}</td>
       <td class="${det && det.otMin   > 0 ? 'td-ot'   : ''}">${det ? fmtWork(det.otMin)   : '-'}</td>
@@ -1339,15 +1586,21 @@ function exportCSV() {
   const schM = settings.scheduledMin%60;
   const schLabel = schH + '時間' + (schM ? schM+'分' : '');
   const HEADS = [
-    '日付','従業員名','出勤時刻','退勤時刻','休憩時間(分)',
+    '日付','従業員名','出勤時刻','退勤時刻','シフト数','休憩時間(分)',
     `所定労働時間(分)[${schLabel}]`,
     '実働時間(分)','実働時間','残業時間(分)','残業時間',
     '深夜労働時間(分)','深夜労働時間','深夜残業時間(分)','深夜残業時間','備考'
   ];
   const csvRows = rows.map(r => {
-    const det = calcDetail(r.clockIn, r.clockOut, r.breakMin, settings.scheduledMin);
+    const shifts     = r.shifts || [];
+    const firstShift = shifts[0] || {};
+    const lastShift  = shifts[shifts.length - 1] || {};
+    const det = shifts.length ? calcDetail(shifts, r.breakMin, settings.scheduledMin) : null;
     return [
-      r.date, r.employeeName, r.clockIn||'', r.clockOut||'', r.breakMin||0,
+      r.date, r.employeeName,
+      firstShift.in || '', lastShift.out || '',
+      shifts.length,
+      r.breakMin || 0,
       settings.scheduledMin,
       det?det.workMin:'', det?fmtWork(det.workMin):'',
       det?det.otMin:'',   det?fmtWork(det.otMin):'',
@@ -1405,6 +1658,25 @@ function updateClock() {
 
 // ─────────────── Init ───────────────
 (async function init() {
+  // 旧フォーマット (clockIn/clockOut) → shifts[] へマイグレーション
+  let migrated = false;
+  records = records.map(r => {
+    if (!r.shifts) {
+      migrated = true;
+      return {
+        id: r.id,
+        employeeId: r.employeeId,
+        employeeName: r.employeeName,
+        date: r.date,
+        shifts: r.clockIn ? [{ in: r.clockIn, out: r.clockOut || null }] : [],
+        breakMin: r.breakMin || 0,
+        remarks: r.remarks || ''
+      };
+    }
+    return r;
+  });
+  if (migrated) localStorage.setItem(SK_REC, JSON.stringify(records));
+
   document.getElementById('fMonth').value = todayISO().slice(0,7);
   applySettingsUI();
   syncEmpFilter();
